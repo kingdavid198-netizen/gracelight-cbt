@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>GraceLight CBT - Subject Selection</title>
+
+<style>
+body{
+font-family:Arial;
+background:#f2f2f2;
+padding:30px;
+}
+
+.container{
+max-width:500px;
+margin:auto;
+background:white;
+padding:30px;
+border-radius:10px;
+box-shadow:0 0 10px rgba(0,0,0,0.2);
+}
+
+h1{
+text-align:center;
+color:darkblue;
+}
+
+label{
+font-weight:bold;
+display:block;
+margin-top:15px;
+}
+
+input,select{
+width:100%;
+padding:12px;
+margin-top:5px;
+font-size:16px;
+border:1px solid #ccc;
+border-radius:5px;
+}
+
+button{
+width:100%;
+padding:15px;
+margin-top:25px;
+background:darkblue;
+color:white;
+border:none;
+font-size:18px;
+border-radius:5px;
+cursor:pointer;
+}
+
+button:hover{
+background:green;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>GraceLight CBT</h1>
+
+<label>Candidate Name</label>
+<input type="text" id="name">
+
+<label>Passport Photograph</label>
+
+<input
+type="file"
+id="passport"
+accept="image/*"
+>
+
+<label>Select Subject</label>
+<select id="subject">
+<option value="">-- Select Subject --</option>
+<option>Account</option>
+<option>Biology</option>
+<option>Chemistry</option>
+<option>Commerce</option>
+<option>CRS</option>
+<option>Economics</option>
+<option>English</option>
+<option>Government</option>
+<option>Literature</option>
+<option>Mathematics</option>
+<option>Physics</option>
+</select>
+
+<label>Select Topic</label>
+<select id="topic">
+<option value="">-- Select Topic --</option>
+</select>
+
+<button onclick="startExam()">Start Exam</button>
+
+</div>
+
+<script>
+
+const subjectSelect = document.getElementById("subject");
+const topicSelect = document.getElementById("topic");
+
+subjectSelect.addEventListener("change", async ()=>{
+
+const subject = subjectSelect.value;
+
+if(subject===""){
+topicSelect.innerHTML =
+'<option value="">-- Select Topic --</option>';
+return;
+}
+
+topicSelect.innerHTML =
+'<option value="">Loading topics...</option>';
+
+try{
+
+const response = await fetch(`/topics/${subject}`);
+
+const topics = await response.json();
+
+topicSelect.innerHTML =
+'<option value="">-- Select Topic --</option>';
+
+if(topics.length===0){
+
+topicSelect.innerHTML +=
+'<option value="">No Topics Found</option>';
+
+return;
+}
+
+topics.forEach(topic => {
+
+topicSelect.innerHTML +=
+`<option value="${topic}">
+${topic}
+</option>`;
+
+});
+
+}catch(error){
+alert("Error loading topics");
+}
+
+});
+
+function startExam(){
+
+const name = document.getElementById("name").value;
+const subject = document.getElementById("subject").value;
+const topic = document.getElementById("topic").value;
+
+if(name==="" || subject==="" || topic===""){
+alert("Please fill all fields");
+return;
+}
+
+localStorage.setItem("candidateName", name);
+localStorage.setItem("subject", subject);
+localStorage.setItem("topic", topic);
+
+const passportInput =
+document.getElementById("passport");
+
+const file =
+passportInput.files[0];
+
+if(file){
+
+if(file.size > 2 * 1024 * 1024){
+alert("Passport must not exceed 2MB");
+return;
+}
+
+const reader = new FileReader();
+
+reader.onload = function(e){
+
+localStorage.setItem(
+"candidatePassport",
+e.target.result
+);
+
+window.location.href = "exam.html";
+
+};
+
+reader.readAsDataURL(file);
+
+}else{
+
+window.location.href = "exam.html";
+
+}
+
+}
+
+</script>
+
+</body>
+</html>

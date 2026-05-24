@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Student Result</title>
+
+<style>
+
+body{
+    font-family:Arial;
+    background:#eef2ff;
+    padding:5px;
+}
+
+.container{
+    background:white;
+    max-width:900px;
+    margin:auto;
+    padding:20px;
+    border-radius:15px;
+    box-shadow:0 0 15px rgba(0,0,0,0.1);
+}
+
+h1{
+    color:#2563eb;
+    text-align:center;
+}
+
+.info{
+margin-top:10px;
+line-height:2;
+font-size:18px;
+width:350px;
+margin-left:60px;
+margin-right:auto;
+text-align:left;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:30px;
+}
+
+th,td{
+    border:1px solid #ddd;
+    padding:12px;
+    text-align:center;
+}
+
+th{
+    background:#2563eb;
+    color:white;
+}
+
+.score{
+    color:green;
+    font-weight:bold;
+}
+
+.print-btn{
+    margin-top:0px;
+    padding:12px 20px;
+    border:none;
+    background:#1e3c72;
+    color:white;
+    border-radius:8px;
+    cursor:pointer;
+}
+
+@media print{
+.print-btn{
+display:none;
+}
+}
+
+.school-header{
+text-align:center;
+margin-bottom:15px;
+}
+
+.school-logo{
+width:90px;
+height:90px;
+object-fit:contain;
+margin-bottom:10px;
+}
+
+.school-header h1{
+color:#2563eb;
+margin:0;
+font-size:36px;
+}
+
+.school-header h3{
+margin:5px 0;
+color:#555;
+font-style:italic;
+font-weight:500;
+}
+
+.school-header h2{
+margin-top:15px;
+color:#111827;
+font-size:28px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="school-header">
+
+<img src="logo.png" class="school-logo">
+
+<h1>GraceLight Learning Centre</h1>
+
+<h3>Where Wisdom Meets Purpose</h3>
+
+<div style="display:flex; justify-content:center; align-items:center; gap:15px;">
+
+<img
+id="resultPassport"
+src="images/passport-placeholder.png"
+style="
+width:70px;
+height:70px;
+border-radius:50%;
+object-fit:cover;
+display:block;
+"
+/>
+
+<h2 style="margin:0;">CBT RESULT SLIP</h2>
+
+</div>
+
+<div class="info" id="studentInfo">
+Loading result...
+</div>
+
+<button class="print-btn" onclick="window.print()">
+Print Result
+</button>
+
+</div>
+
+<script>
+
+const studentName =
+localStorage.getItem("studentSearch");
+
+const allResults =
+JSON.parse(localStorage.getItem("allResults")) || [];
+
+const student = allResults.find(r =>
+
+r.candidateName &&
+r.candidateName.toLowerCase().trim() ===
+studentName.toLowerCase().trim()
+
+);
+
+if(student){
+
+document.getElementById("studentInfo").innerHTML = `
+
+<p><strong>Candidate:</strong>
+${student.candidateName || "N/A"}</p>
+
+<p><strong>Subject:</strong>
+${student.subject || "N/A"}</p>
+
+<p><strong>Topic:</strong>
+${student.topic || "N/A"}</p>
+
+<p><strong>Score:</strong>
+<span class="score">
+${student.score || 0}/${student.totalQuestions || 0}
+</span>
+</p>
+
+<p><strong>Percentage:</strong>
+${student.percentage || 0}%</p>
+
+<p><strong>Remark:</strong>
+${student.remark || "N/A"}</p>
+
+`;
+
+}else{
+
+document.getElementById("studentInfo").innerHTML = `
+<h2 style="color:red;text-align:center;">
+Result Not Found
+</h2>
+`;
+
+}
+
+const resultPassport =
+document.getElementById("resultPassport");
+
+const savedPassport =
+localStorage.getItem("candidatePassport");
+
+if(savedPassport && resultPassport){
+resultPassport.src = savedPassport;
+}
+
+</script>
+
+</body>
+</html>

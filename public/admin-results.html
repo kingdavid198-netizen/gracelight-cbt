@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Admin Results</title>
+
+<style>
+body{
+font-family:Arial;
+background:#f4f7ff;
+padding:20px;
+}
+
+.container{
+max-width:1100px;
+margin:auto;
+background:white;
+padding:20px;
+border-radius:12px;
+box-shadow:0 0 10px rgba(0,0,0,0.1);
+}
+
+h1{
+text-align:center;
+color:#2563eb;
+margin-bottom:20px;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+margin-top:20px;
+}
+
+th, td{
+border:1px solid #ccc;
+padding:12px;
+text-align:center;
+}
+
+th{
+background:#2563eb;
+color:white;
+}
+
+tr:nth-child(even){
+background:#f9f9f9;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>All Candidates Results</h1>
+
+<table>
+<thead>
+<tr>
+<th>Candidate</th>
+<th>Subject</th>
+<th>Topic</th>
+<th>Score</th>
+<th>Percentage</th>
+<th>Remark</th>
+<th>Date</th>
+</tr>
+</thead>
+
+<tbody id="resultsBody">
+
+</tbody>
+</table>
+
+</div>
+
+<script>
+
+const allResults =
+JSON.parse(localStorage.getItem("allResults")) || [];
+
+const resultsBody =
+document.getElementById("resultsBody");
+
+if(allResults.length === 0){
+
+resultsBody.innerHTML = `
+<tr>
+<td colspan="7">No Results Found</td>
+</tr>
+`;
+
+}else{
+
+allResults.forEach(result => {
+
+resultsBody.innerHTML += `
+<tr>
+<td>${result.candidateName || "N/A"}</td>
+<td>${result.subject || "N/A"}</td>
+<td>${result.topic || "N/A"}</td>
+<td>${result.score || 0}/${result.totalQuestions || 0}</td>
+<td>${result.percentage || 0}%</td>
+<td>${result.remark || "N/A"}</td>
+<td>${result.date || "N/A"}</td>
+</tr>
+`;
+
+});
+
+}
+
+</script>
+
+</body>
+</html>

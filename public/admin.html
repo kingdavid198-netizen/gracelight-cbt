@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Login - GraceLight CBT</title>
+
+<style>
+
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+font-family:Arial,sans-serif;
+}
+
+body{
+height:100vh;
+display:flex;
+justify-content:center;
+align-items:center;
+background:
+linear-gradient(rgba(0,0,0,0.5),rgba(0,0,0,0.5)),
+url('index.png');
+background-size:cover;
+background-position:center;
+padding:20px;
+}
+
+.container{
+width:100%;
+max-width:420px;
+background:white;
+padding:40px 30px;
+border-radius:25px;
+text-align:center;
+box-shadow:0 10px 30px rgba(0,0,0,0.3);
+}
+
+.logo{
+width:90px;
+margin-bottom:10px;
+}
+
+h1{
+font-size:42px;
+color:#3f51b5;
+margin-bottom:10px;
+}
+
+.subtitle{
+color:#666;
+margin-bottom:30px;
+font-size:18px;
+}
+
+input{
+width:100%;
+padding:16px;
+margin-bottom:20px;
+border:1px solid #ddd;
+border-radius:10px;
+font-size:17px;
+outline:none;
+}
+
+button{
+width:100%;
+padding:16px;
+border:none;
+border-radius:10px;
+font-size:20px;
+font-weight:bold;
+cursor:pointer;
+background:linear-gradient(to right,#3f51b5,#4fc3f7);
+color:white;
+transition:0.3s;
+}
+
+button:hover{
+opacity:0.9;
+transform:scale(1.02);
+}
+
+.footer{
+margin-top:25px;
+font-size:14px;
+color:#777;
+line-height:1.6;
+}
+
+.error{
+color:red;
+margin-top:10px;
+font-size:15px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<img src="logo.png" class="logo">
+
+<h1>GraceLight CBT</h1>
+
+<div class="subtitle">
+Secure Admin Login
+</div>
+
+<input type="text" id="username" placeholder="Admin Username">
+
+<input type="password" id="password" placeholder="Admin Password">
+
+<button onclick="loginAdmin()">
+Login
+</button>
+
+<div class="error" id="error"></div>
+
+<div class="footer">
+© 2026 GraceLight Learning Centre, Oda<br>
+08077001605<br>
+All Rights Reserved
+</div>
+
+</div>
+
+<script>
+
+function loginAdmin(){
+
+const username =
+document.getElementById("username").value;
+
+const password =
+document.getElementById("password").value;
+
+if(
+username === "kingdave"
+&&
+password === "AYOdeji1975#"
+){
+
+localStorage.setItem("adminLoggedIn","true");
+
+window.location.href =
+"admin-dashboard.html";
+
+}else{
+
+document.getElementById("error").innerHTML =
+"Invalid admin username or password";
+
+}
+
+}
+
+</script>
+
+</body>
+</html>
