@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Select Subject</title>
+
+<style>
+
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+font-family:Arial,sans-serif;
+}
+
+body{
+background:linear-gradient(135deg,#1a237e,#42a5f5);
+height:100vh;
+display:flex;
+justify-content:center;
+align-items:center;
+padding:15px;
+overflow:hidden;
+}
+
+.container{
+background:white;
+width:100%;
+max-width:600px;
+height:95vh;
+border-radius:25px;
+padding:30px;
+overflow-y:auto;
+text-align:center;
+box-shadow:0 10px 30px rgba(0,0,0,0.3);
+}
+
+.logo{
+width:80px;
+margin-bottom:10px;
+}
+
+h1{
+font-size:42px;
+color:#2962ff;
+margin-bottom:8px;
+}
+
+.instruction{
+font-size:16px;
+color:#666;
+margin-bottom:25px;
+line-height:1.5;
+}
+
+button{
+width:100%;
+padding:16px;
+margin-bottom:14px;
+border:none;
+border-radius:12px;
+font-size:20px;
+font-weight:bold;
+color:white;
+cursor:pointer;
+transition:0.3s;
+background:linear-gradient(to right,#2962ff,#4fc3f7);
+}
+
+button:hover{
+transform:translateY(-2px);
+}
+
+.footer{
+margin-top:15px;
+font-size:13px;
+line-height:1.5;
+color:#777;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<img src="logo.png" class="logo">
+
+<h1>Select Subject</h1>
+
+<div class="instruction">
+Please choose a subject to begin your examination
+</div>
+
+<button onclick="choose('Mathematics')">
+Mathematics
+</button>
+
+<button onclick="choose('English')">
+English
+</button>
+
+<button onclick="choose('Biology')">
+Biology
+</button>
+
+<button onclick="choose('Chemistry')">
+Chemistry
+</button>
+
+<button onclick="choose('Physics')">
+Physics
+</button>
+
+<button onclick="choose('Government')">
+Government
+</button>
+
+<button onclick="choose('Literature')">
+Literature
+</button>
+
+<button onclick="choose('Account')">
+Account
+</button>
+
+<button onclick="choose('Commerce')">
+Commerce
+</button>
+
+<button onclick="choose('Economics')">
+Economics
+</button>
+
+<button onclick="choose('CRS')">
+CRS
+</button>
+
+<div class="footer">
+© 2026 GraceLight Learning Centre, Oda<br>
+08077001605<br>
+All Rights Reserved
+</div>
+
+</div>
+
+<script>
+
+function choose(subject){
+
+localStorage.setItem(
+"selectedSubject",
+subject
+);
+
+window.location.href = "exam.html";
+
+}
+
+</script>
+
+</body>
+</html>

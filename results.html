@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GraceLight CBT Results</title>
+
+<style>
+
+body{
+    font-family:Arial, sans-serif;
+    background:#eef2ff;
+    margin:0;
+    padding:30px;
+}
+
+.container{
+    max-width:1000px;
+    margin:auto;
+    background:white;
+    padding:35px;
+    border-radius:20px;
+    box-shadow:0 0 10px rgba(0,0,0,0.08);
+}
+
+/* HEADER */
+
+.header{
+    display:flex;
+    align-items:flex-start;
+    gap:20px;
+    margin-bottom:15px;
+}
+
+.school-logo{
+    width:90px;
+    height:90px;
+    object-fit:contain;
+}
+
+.header-text{
+    margin-top:-8px;
+}
+
+.header-text h1{
+    margin:0;
+    font-size:58px;
+    color:#1d39d8;
+    font-weight:bold;
+}
+
+.motto{
+    margin-top:6px;
+    margin-left:95px;
+    font-size:18px;
+    color:#304ffe;
+    font-style:italic;
+    font-weight:bold;
+}
+
+/* BUTTONS */
+
+.button-container{
+    display:flex;
+    gap:15px;
+    margin-top:20px;
+    margin-bottom:20px;
+}
+
+.print-btn,
+.excel-btn{
+    border:none;
+    color:white;
+    padding:10px 22px;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:15px;
+    font-weight:bold;
+}
+
+.print-btn{
+    background:#1e3c72;
+}
+
+.excel-btn{
+    background:#16a34a;
+}
+
+/* SEARCH */
+
+.search-box{
+    width:320px;
+    padding:10px;
+    border:1px solid #ccc;
+    border-radius:4px;
+    font-size:15px;
+    margin-bottom:25px;
+}
+
+/* CANDIDATE INFO */
+
+.result-card{
+    margin-bottom:25px;
+}
+
+.section-title{
+    font-size:28px;
+    font-weight:bold;
+    margin-bottom:15px;
+}
+
+.info-grid{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:8px;
+}
+
+.info-item{
+    font-size:16px;
+}
+
+.label{
+    font-weight:bold;
+}
+
+/* SUMMARY */
+
+.summary-container{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:15px;
+    margin-top:20px;
+    margin-bottom:30px;
+}
+
+.summary-card{
+    padding:18px;
+    border-radius:12px;
+    text-align:center;
+    font-weight:bold;
+    font-size:16px;
+}
+
+.summary-card p{
+    margin-top:10px;
+    font-size:30px;
+}
+
+.blue{
+    background:#eef6ff;
+    color:#3b5bdb;
+}
+
+.green{
+    background:#eefcf3;
+    color:#2b8a3e;
+}
+
+.orange{
+    background:#fff8e8;
+    color:#c98a00;
+}
+
+.pink{
+    background:#fff0f6;
+    color:#c2255c;
+}
+
+/* TABLE */
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+th, td{
+    border:1px solid #ddd;
+    padding:12px;
+    text-align:center;
+}
+
+th{
+    background:#2563eb;
+    color:white;
+}
+
+.score{
+    color:green;
+    font-weight:bold;
+}
+
+/* FOOTER */
+
+.footer{
+    text-align:center;
+    margin-top:40px;
+    color:#888;
+    font-size:14px;
+}
+
+/* PRINT */
+
+@media print{
+
+    body{
+        background:white;
+        padding:0;
+        margin:0;
+    }
+
+    .container{
+        box-shadow:none;
+        border:none;
+        width:100%;
+    }
+
+    .print-btn,
+    .excel-btn,
+    .search-box{
+        display:none;
+    }
+
+    table{
+        width:100%;
+    }
+
+    th, td{
+        color:black;
+        border:1px solid #ccc;
+    }
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <!-- HEADER -->
+
+    <div class="header">
+
+        <img src="logo.png" alt="School Logo" class="school-logo">
+
+        <div class="header-text">
+            <h1>GraceLight CBT Results</h1>
+
+            <div class="motto">
+                Where Wisdom Meets Purpose
+            </div>
+        </div>
+
+    </div>
+
+    <!-- BUTTONS -->
+
+    <div class="button-container">
+
+        <button class="print-btn" onclick="window.print()">
+            🖨 Print Results
+        </button>
+
+        <button class="excel-btn">
+            📗 Export to Excel
+        </button>
+
+    </div>
+
+    <!-- SEARCH -->
+
+    <input type="text"
+    class="search-box"
+    placeholder="Search candidate or subject...">
+
+    <!-- STUDENT INFO -->
+
+    <div id="studentBanner">
+
+        <div class="result-card">
+
+            <div class="section-title">
+                Candidate Information
+            </div>
+
+            <div class="info-grid">
+
+                <div class="info-item">
+                    <span class="label">Candidate:</span>
+                    OLUSOLA OLUWASEFUNMI
+                </div>
+
+                <div class="info-item">
+                    <span class="label">Subject:</span>
+                    Chemistry
+                </div>
+
+                <div class="info-item">
+                    <span class="label">Topic:</span>
+                    Molecular mass
+                </div>
+
+                <div class="info-item">
+                    <span class="label">Score:</span>
+                    1 / 1
+                </div>
+
+                <div class="info-item">
+                    <span class="label">Percentage:</span>
+                    100%
+                </div>
+
+                <div class="info-item">
+                    <span class="label">Remark:</span>
+                    Excellent
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- SUMMARY -->
+
+    <div class="summary-container">
+
+        <div class="summary-card blue">
+            Total Candidates
+            <p>5</p>
+        </div>
+
+        <div class="summary-card green">
+            Total Tests
+            <p>5</p>
+        </div>
+
+        <div class="summary-card orange">
+            Highest Score
+            <p>90%</p>
+        </div>
+
+        <div class="summary-card pink">
+            Average Score
+            <p>58%</p>
+        </div>
+
+    </div>
+
+    <!-- TABLE -->
+
+    <table>
+
+        <thead>
+
+            <tr>
+                <th>Candidate</th>
+                <th>Subject</th>
+                <th>Topic</th>
+                <th>Score</th>
+                <th>Percentage</th>
+                <th>Remark</th>
+                <th>Date</th>
+            </tr>
+
+        </thead>
+
+        <tbody id="resultBody">
+
+            <tr>
+
+                <td>OLUSOLA OLUWASEFUNMI</td>
+
+                <td>Chemistry</td>
+
+                <td>Molecular mass</td>
+
+                <td class="score">1 / 1</td>
+
+                <td>100%</td>
+
+                <td>Excellent</td>
+
+                <td>5/18/2026, 8:55 PM</td>
+
+            </tr>
+
+        </tbody>
+
+    </table>
+
+    <!-- FOOTER -->
+
+    <div class="footer">
+        © 2026 GraceLight CBT System. All rights reserved.
+    </div>
+
+</div>
+
+</body>
+</html>

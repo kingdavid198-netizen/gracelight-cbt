@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Student Result Login</title>
+
+<style>
+body{
+    font-family:Arial;
+    background:#eef2ff;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+}
+
+.box{
+    background:white;
+    padding:40px;
+    border-radius:15px;
+    width:350px;
+    text-align:center;
+    box-shadow:0 0 15px rgba(0,0,0,0.1);
+}
+
+input{
+    width:100%;
+    padding:12px;
+    margin-top:15px;
+    border:1px solid #ccc;
+    border-radius:8px;
+}
+
+button{
+    margin-top:20px;
+    width:100%;
+    padding:12px;
+    border:none;
+    border-radius:8px;
+    background:#2563eb;
+    color:white;
+    font-size:16px;
+    cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<div class="box">
+
+<h2>Check Result</h2>
+
+<input type="text"
+id="studentName"
+placeholder="Enter Student Name">
+
+<button onclick="checkResult()">
+View Result
+</button>
+
+</div>
+
+<script>
+function checkResult(){
+
+const name =
+document.getElementById("studentName").value;
+
+localStorage.setItem("studentSearch", name);
+
+location.href = "student-result.html";
+}
+</script>
+
+</body>
+</html>

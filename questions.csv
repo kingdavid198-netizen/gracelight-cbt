@@ -1,0 +1,110 @@
+subject,question,optionA,optionB,optionC,optionD,answer
+English,Choose the correct synonym of "abundant",scarce,plenty,small,empty,B
+English,He ___ to school every day.,go,goes,going,went,B
+English,Identify the antonym of "brave",bold,cowardly,strong,fearless,B
+English,Choose correct spelling,Recieve,Receive,Receeve,Receve,B
+English,Fill in the blank: She is good ___ English.,in,at,on,with,B
+English,The plural of "child" is?,childs,children,childes,childrens,B
+English,Identify the noun in the sentence: He runs fast.,runs,fast,he,none,D
+English,Choose correct tense: I ___ yesterday.,go,going,went,goes,C
+English,Opposite of "happy",sad,joyful,excited,calm,A
+English,He ___ eaten.,has,have,had,will,A
+
+Mathematics,2+2=?,3,4,5,6,B
+Mathematics,5x3=?,15,10,20,25,A
+Mathematics,Square root of 16?,2,4,6,8,B
+Mathematics,10/2=?,2,3,5,10,C
+Mathematics,7+8=?,14,15,16,17,B
+Mathematics,9x9=?,72,81,90,99,B
+Mathematics,100-45=?,45,50,55,60,C
+Mathematics,12/4=?,2,3,4,6,B
+Mathematics,6x7=?,36,42,48,54,B
+Mathematics,3²=?,6,9,12,3,B
+
+Physics,Unit of force?,Joule,Watt,Newton,Pascal,C
+Physics,Speed = ?,distance/time,time/distance,mass/time,force/distance,A
+Physics,SI unit of mass?,Kg,g,ton,mg,A
+Physics,Energy unit?,Joule,Newton,Watt,Volt,A
+Physics,Acceleration is?,change in velocity,force,energy,speed,A
+Physics,Light travels fastest in?,air,water,glass,vacuum,D
+Physics,Unit of power?,Watt,Joule,Newton,Volt,A
+Physics,Gravity on earth?,9.8,10,8.9,7.2,A
+Physics,Voltage unit?,Volt,Ampere,Ohm,Joule,A
+Physics,Work done =?,force x distance,force x time,mass x speed,time x distance,A
+
+Chemistry,Water formula?,H2O,CO2,O2,H2,A
+Chemistry,Atomic number of Hydrogen?,1,2,3,4,A
+Chemistry,Gas used in respiration?,Oxygen,Nitrogen,Carbon dioxide,Hydrogen,A
+Chemistry,pH of acid?,<7,>7,7,0,A
+Chemistry,Salt is formed from?,acid+base,acid+acid,base+base,none,A
+Chemistry,NaCl is?,salt,acid,base,gas,A
+Chemistry,Carbon symbol?,C,O,N,H,A
+Chemistry,Boiling point of water?,100°C,90°C,80°C,70°C,A
+Chemistry,Element in air most?,Nitrogen,Oxygen,Carbon,Hydrogen,A
+Chemistry,HCl is?,acid,base,salt,gas,A
+
+Biology,Unit of life?,Cell,Tissue,Organ,System,A
+Biology,Photosynthesis occurs in?,leaf,root,stem,flower,A
+Biology,Human heart chambers?,2,3,4,5,C
+Biology,Respiration uses?,oxygen,carbon,nitrogen,hydrogen,A
+Biology,Plant food making?,photosynthesis,respiration,transpiration,digestion,A
+Biology,Blood colour?,red,blue,green,yellow,A
+Biology,Brain controls?,body,movement,digestion,all,D
+Biology,Human skeleton?,206,210,180,150,A
+Biology,Energy from food?,glucose,water,salt,fat,A
+Biology,Plant root absorbs?,water,air,light,soil,A
+
+Government,Law making body?,Legislature,Executive,Judiciary,Police,A
+Government,Head of state?,President,Governor,Mayor,Chief,A
+Government,Democracy means?,rule by people,rule by king,rule by army,none,A
+Government,Constitution is?,law book,story book,guide,none,A
+Government,Executive enforces?,laws,rules,traditions,none,A
+Government,Judiciary interprets?,laws,traditions,customs,none,A
+Government,Voting age Nigeria?,18,16,21,20,A
+Government,State head?,Governor,President,Mayor,Chief,A
+Government,Upper house?,Senate,House,Court,Assembly,A
+Government,Lower house?,House of reps,Senate,Court,none,A
+
+CRS,Who built ark?,Noah,Moses,David,Abraham,A
+CRS,Jesus birth place?,Bethlehem,Nazareth,Jerusalem,Egypt,A
+CRS,First man?,Adam,David,Peter,Paul,A
+CRS,First woman?,Eve,Mary,Ruth,Deborah,A
+CRS,Jesus disciples?,12,10,8,6,A
+CRS,Who betrayed Jesus?,Judas,Peter,John,Paul,A
+CRS,Bible parts?,2,3,4,5,A
+CRS,Old Testament books?,39,27,66,12,A
+CRS,New Testament books?,27,39,66,12,A
+CRS,Ten commandments given to?,Moses,David,Paul,Peter,A
+
+Economics,Economics studies?,scarcity,money,trade,production,A
+Economics,Demand means?,want backed by money,need,desire,none,A
+Economics,Supply means?,goods available,goods needed,goods sold,none,A
+Economics,Opportunity cost?,next best alternative,total cost,profit,loss,A
+Economics,Inflation means?,price rise,price fall,stable price,none,A
+Economics,Market is?,place of trade,school,bank,office,A
+Economics,Profit =?,revenue-cost,cost-revenue,revenue+cost,none,A
+Economics,Money is?,medium of exchange,store,value,all,D
+Economics,Capital is?,money,labour,land,none,A
+Economics,Labour is?,human effort,machine,land,none,A
+
+Accounting,Accounting records?,transactions,stories,politics,none,A
+Accounting,Asset means?,owned item,liability,debt,loss,A
+Accounting,Liability means?,debt,asset,profit,loss,A
+Accounting,Capital means?,owner fund,debt,loss,none,A
+Accounting,Profit =?,income-expense,expense-income,none,all,A
+Accounting,Ledger is?,record book,store,office,none,A
+Accounting,Debit side?,left,right,top,bottom,A
+Accounting,Credit side?,right,left,top,bottom,A
+Accounting,Trial balance?,list,book,account,none,A
+Accounting,Balance sheet shows?,position,profit,loss,none,A
+
+Commerce,Commerce deals with?,trade,farming,teaching,none,A
+Commerce,Trade types?,internal,external,both,none,C
+Commerce,Retail trade?,small selling,big selling,none,all,A
+Commerce,Wholesale trade?,bulk selling,small selling,none,all,A
+Commerce,Transport helps?,movement,storage,banking,none,A
+Commerce,Banking deals with?,money,goods,services,none,A
+Commerce,Insurance protects?,risk,loss,profit,none,A
+Commerce,Advertising promotes?,goods,services,both,none,C
+Commerce,Communication means?,sending info,receiving info,both,none,C
+Commerce,Market is?,place of exchange,school,bank,none,A

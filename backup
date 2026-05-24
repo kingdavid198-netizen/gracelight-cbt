@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login</title>
+
+<style>
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+font-family:Arial,sans-serif;
+}
+
+body{
+background:linear-gradient(135deg,#1a237e,#42a5f5);
+height:100vh;
+display:flex;
+justify-content:center;
+align-items:center;
+padding:20px;
+}
+
+.container{
+background:white;
+width:100%;
+max-width:950px;
+border-radius:25px;
+overflow:hidden;
+display:flex;
+}
+
+.left{
+flex:1;
+}
+
+.left img{
+width:100%;
+height:100%;
+object-fit:cover;
+}
+
+.right{
+flex:1;
+padding:40px;
+display:flex;
+flex-direction:column;
+justify-content:center;
+}
+
+.logo{
+width:80px;
+margin:auto;
+margin-bottom:10px;
+}
+
+h1{
+text-align:center;
+font-size:48px;
+color:#2962ff;
+margin-bottom:10px;
+}
+
+.subtitle{
+text-align:center;
+margin-bottom:25px;
+color:#666;
+}
+
+input{
+width:100%;
+padding:14px;
+margin-bottom:15px;
+border:1px solid #ccc;
+border-radius:10px;
+font-size:16px;
+}
+
+button{
+width:100%;
+padding:14px;
+border:none;
+border-radius:10px;
+font-size:18px;
+font-weight:bold;
+color:white;
+cursor:pointer;
+margin-bottom:12px;
+}
+
+.student{
+background:linear-gradient(to right,#2962ff,#4fc3f7);
+}
+
+.admin{
+background:linear-gradient(to right,#7c4dff,#b388ff);
+}
+
+.footer{
+text-align:center;
+font-size:13px;
+margin-top:10px;
+line-height:1.6;
+color:#777;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<div class="left">
+<img src="login.png">
+</div>
+
+<div class="right">
+
+<img src="logo.png" class="logo">
+
+<h1>GraceLight CBT</h1>
+
+<div class="subtitle" style="
+color:#6a5acd;
+font-weight:bold;
+letter-spacing:1px;
+">
+Where Wisdom Meets Purpose
+</div>
+
+<input type="text" id="candidateName" placeholder="Enter Access Code">
+
+<button class="student" onclick="studentLogin()">
+Enter Exam
+</button>
+
+<button class="admin" onclick="adminLogin()">
+Admin Login
+</button>
+
+<div class="footer">
+© 2026 GraceLight Learning Centre, Oda
+</div>
+
+</div>
+</div>
+
+<script>
+function studentLogin(){
+
+const accessCode =
+document.getElementById("candidateName").value;
+
+if(accessCode !== "GLC2026"){
+alert("Invalid Access Code");
+return;
+}
+
+window.location.href = "select-subject.html";
+
+}
+
+function adminLogin(){
+
+const password=prompt("Enter Admin Password");
+
+if(password==="AYOdeji1975#"){
+window.location.href="admin-dashboard.html";
+}else{
+alert("Wrong Password");
+}
+}
+</script>
+
+</body>
+</html>

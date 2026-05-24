@@ -1,0 +1,35 @@
+[
+  {
+    "id": 1778679708436,
+    "subject": "Chemistry",
+    "topic": "Molecular mass",
+    "question": "What is the molecular mass of Hydrochloric acid?",
+    "optionA": "34.5",
+    "optionB": "35.5",
+    "optionC": "36.5",
+    "optionD": "37.5",
+    "answer": "C"
+  },
+  {
+    "id": 1778680095294,
+    "subject": "Biology",
+    "topic": "Blood Group",
+    "question": "An individual with blood group A can donate blood to",
+    "optionA": "All groups",
+    "optionB": "AB",
+    "optionC": "B",
+    "optionD": "O",
+    "answer": "B"
+  },
+  {
+    "id": 1779230811173,
+    "subject": "Biology",
+    "topic": "Evolution",
+    "question": "Who is the father of organic evolution?",
+    "optionA": "Darwin",
+    "optionB": "Michael",
+    "optionC": "Faraday",
+    "optionD": "David",
+    "answer": "A"
+  }
+]

@@ -1,0 +1,147 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+
+    background: linear-gradient(135deg, #4facfe, #00f2fe);
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.container {
+    width: 80%;
+    max-width: 400px;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.card {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    width: 100%;
+    text-align: center;
+
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    transition: 0.3s;
+}
+.card:hover {
+    box-shadow: 0 15px 40px rgba(0,0,0,0.25);
+    transform: translateY(-5px);
+}
+
+a {
+    display: block;
+    margin: 10px 0;
+    padding: 12px;
+    background: #3498db;
+    color: white;
+    text-decoration: none;
+    border-radius: 6px;
+    font-weight: 500;
+
+    transition: all 0.25s ease;
+}
+
+a:hover {
+    background: linear-gradient(135deg, #3a8dde, #009ec3);
+    transform: translateY(-2px);
+}
+
+
+button {
+    width: 100%;
+    padding: 10px;
+    background: linear-gradient(135deg, #4facfe, #00c6ff);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: all 0.25s ease;
+}
+
+button:hover {
+    background: linear-gradient(135deg, #4facfe, #00c6ff);
+    transform: translateY(-2px);
+}
+
+button:active {
+    transform: translateY(1px);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+}
+
+
+/* ===== INPUT STYLING ===== */
+input {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+/* ===== HEADINGS ===== */
+h1 {
+    font-size: 36px;        /* slightly bigger */
+    font-weight: 700;       /* stronger bold */
+    margin-bottom: 20px;
+    color: #222;            /* deeper color */
+    letter-spacing: 1px;    /* spacing between letters */
+}
+
+h2 {
+    font-size: 26px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: #444;
+}
+
+/* ===== CARD SHADOW (UPGRADE) ===== */
+.card {
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    transition: 0.3s;
+}
+
+.card:hover {
+    box-shadow: 0 15px 40px rgba(0,0,0,0.25);
+    transform: translateY(-5px);
+}
+
+#answers button {
+    width: 100%;
+    margin: 8px 0;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    background: #3498db;
+    color: white;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+#answers button:hover {
+    background: #2980b9;
+}
+
+a {
+    display: block;
+    background: #4aa3df;
+    color: white;
+    padding: 12px;
+    margin: 10px 0;
+    text-align: center;
+    border-radius: 6px;
+    text-decoration: none;
+}
+
+a:hover {
+    background: #2d89c6;
+}
