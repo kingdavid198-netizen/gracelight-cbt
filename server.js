@@ -13,6 +13,11 @@ mongoose.connect("mongodb://kingdavid198_db_user:C236Mi5SfOFPEK04@ac-lqc7g82-sha
 app.use(express.json());
 
 app.use(express.static("public"));
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
 app.use("/uploads", express.static("uploads"));
 
 const storage = multer.diskStorage({
