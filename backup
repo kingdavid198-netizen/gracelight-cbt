@@ -1,176 +1,274 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Login</title>
+const express = require("express");
+const fs = require("fs");
+const multer = require("multer");
+const path = require("path");
+const mongoose = require("mongoose");
 
-<style>
-*{
-margin:0;
-padding:0;
-box-sizing:border-box;
-font-family:Arial,sans-serif;
+const app = express();
+
+mongoose.connect("mongodb://kingdavid198_db_user:C236Mi5SfOFPEK04@ac-lqc7g82-shard-00-00.bor0opc.mongodb.net:27017,ac-lqc7g82-shard-00-01.bor0opc.mongodb.net:27017,ac-lqc7g82-shard-00-02.bor0opc.mongodb.net:27017/?ssl=true&replicaSet=atlas-125o8c-shard-0&authSource=admin&appName=Cluster0")
+.then(() => console.log("MongoDB Connected"))
+.catch(err => console.log(err));
+
+app.use(express.json());
+
+app.use(express.static("public"));
+app.use("/uploads", express.static("uploads"));
+
+const storage = multer.diskStorage({
+
+    destination: function(req, file, cb){
+        cb(null, "uploads/");
+    },
+
+    filename: function(req, file, cb){
+
+        const uniqueName =
+            Date.now() +
+            path.extname(file.originalname);
+
+        cb(null, uniqueName);
+    }
+
+});
+
+const upload = multer({
+    storage: storage
+});
+
+const questionsFile = "questions.json";
+
+if (!fs.existsSync(questionsFile)) {
+    fs.writeFileSync(questionsFile, "[]");
 }
 
-body{
-background:linear-gradient(135deg,#1a237e,#42a5f5);
-height:100vh;
-display:flex;
-justify-content:center;
-align-items:center;
-padding:20px;
-}
+app.get("/topics/:subject", (req, res) => {
 
-.container{
-background:white;
-width:100%;
-max-width:950px;
-border-radius:25px;
-overflow:hidden;
-display:flex;
-}
+    const subject = req.params.subject;
 
-.left{
-flex:1;
-}
+    const data = fs.readFileSync(
+        questionsFile,
+        "utf8"
+    );
 
-.left img{
-width:100%;
-height:100%;
-object-fit:cover;
-}
+    const questions = JSON.parse(data);
 
-.right{
-flex:1;
-padding:40px;
-display:flex;
-flex-direction:column;
-justify-content:center;
-}
+    const topics = [
+        ...new Set(
+            questions
+            .filter(q => q.subject === subject)
+            .map(q => q.topic)
+        )
+    ];
 
-.logo{
-width:80px;
-margin:auto;
-margin-bottom:10px;
-}
+    res.json(topics);
 
-h1{
-text-align:center;
-font-size:48px;
-color:#2962ff;
-margin-bottom:10px;
-}
+});
 
-.subtitle{
-text-align:center;
-margin-bottom:25px;
-color:#666;
-}
+app.get("/questions", (req, res) => {
 
-input{
-width:100%;
-padding:14px;
-margin-bottom:15px;
-border:1px solid #ccc;
-border-radius:10px;
-font-size:16px;
-}
+    const data = fs.readFileSync(
+        questionsFile,
+        "utf8"
+    );
 
-button{
-width:100%;
-padding:14px;
-border:none;
-border-radius:10px;
-font-size:18px;
-font-weight:bold;
-color:white;
-cursor:pointer;
-margin-bottom:12px;
-}
+    const questions = JSON.parse(data);
 
-.student{
-background:linear-gradient(to right,#2962ff,#4fc3f7);
-}
+    res.json(questions);
 
-.admin{
-background:linear-gradient(to right,#7c4dff,#b388ff);
-}
+});
 
-.footer{
-text-align:center;
-font-size:13px;
-margin-top:10px;
-line-height:1.6;
-color:#777;
-}
-</style>
-</head>
-<body>
+app.post("/add-question", (req, res) => {
 
-<div class="container">
+    const newQuestion = req.body;
 
-<div class="left">
-<img src="login.png">
-</div>
+    const data = fs.readFileSync(
+        questionsFile,
+        "utf8"
+    );
 
-<div class="right">
+    const questions = JSON.parse(data);
 
-<img src="logo.png" class="logo">
+    newQuestion.id = Date.now();
 
-<h1>GraceLight CBT</h1>
+    questions.push(newQuestion);
 
-<div class="subtitle" style="
-color:#6a5acd;
-font-weight:bold;
-letter-spacing:1px;
-">
-Where Wisdom Meets Purpose
-</div>
+    fs.writeFileSync(
+        questionsFile,
+        JSON.stringify(questions, null, 2)
+    );
 
-<input type="text" id="candidateName" placeholder="Enter Access Code">
+    res.json({
+        success: true
+    });
 
-<button class="student" onclick="studentLogin()">
-Enter Exam
-</button>
+});
 
-<button class="admin" onclick="adminLogin()">
-Admin Login
-</button>
+app.post("/update-question/:id", (req, res) => {
 
-<div class="footer">
-© 2026 GraceLight Learning Centre, Oda
-</div>
+    const id = Number(req.params.id);
 
-</div>
-</div>
+    const {
+        subject,
+        topic,
+        question,
+        optionA,
+        optionB,
+        optionC,
+        optionD,
+        answer
+    } = req.body;
 
-<script>
-function studentLogin(){
+    const data = fs.readFileSync(
+        questionsFile,
+        "utf8"
+    );
 
-const accessCode =
-document.getElementById("candidateName").value;
+    let questions = JSON.parse(data);
 
-if(accessCode !== "GLC2026"){
-alert("Invalid Access Code");
-return;
-}
+    const index = questions.findIndex(
+        q => q.id === id
+    );
 
-window.location.href = "select-subject.html";
+    if(index === -1){
+        return res.json({
+            success:false
+        });
+    }
 
-}
+    questions[index] = {
+        id,
+        subject,
+        topic,
+        question,
+        optionA,
+        optionB,
+        optionC,
+        optionD,
+        answer
+    };
 
-function adminLogin(){
+    fs.writeFileSync(
+        questionsFile,
+        JSON.stringify(questions, null, 2)
+    );
 
-const password=prompt("Enter Admin Password");
+    res.json({
+        success:true
+    });
 
-if(password==="AYOdeji1975#"){
-window.location.href="admin-dashboard.html";
+});
+
+app.delete("/delete-question/:id", (req, res) => {
+
+    const id = Number(req.params.id);
+
+    const data = fs.readFileSync(
+        questionsFile,
+        "utf8"
+    );
+
+    let questions = JSON.parse(data);
+
+    questions = questions.filter(
+        q => q.id !== id
+    );
+
+    fs.writeFileSync(
+        questionsFile,
+        JSON.stringify(questions, null, 2)
+    );
+
+    res.json({
+        success: true
+    });
+
+});
+
+app.get("/topics/:subject", (req, res) => {
+
+    const subject = req.params.subject;
+
+    try {
+
+        const data = fs.readFileSync("questions.json", "utf8");
+
+        const questions = JSON.parse(data);
+
+        const filtered = questions.filter(
+            q => q.subject === subject
+        );
+
+        const topics = [...new Set(
+            filtered.map(q => q.topic)
+        )];
+
+        res.json(
+            topics.map(topic => ({ topic }))
+        );
+
+    } catch (error) {
+
+        res.json([]);
+
+    }
+
+});
+
+let examPins = [];
+
+app.post("/save-pin", (req, res) => {
+
+const { pin } = req.body;
+
+examPins.push({
+pin: pin,
+used: false
+});
+
+res.json({
+success: true
+});
+
+});
+
+app.get("/get-pin", (req, res) => {
+
+res.json({
+pins: examPins
+});
+
+});
+
+app.post("/use-pin", (req, res) => {
+
+const { pin } = req.body;
+
+const foundPin =
+examPins.find(p => p.pin === pin);
+
+if(foundPin){
+
+foundPin.used = true;
+
+res.json({
+success:true
+});
+
 }else{
-alert("Wrong Password");
-}
-}
-</script>
 
-</body>
-</html>
+res.json({
+success:false
+});
+
+}
+
+});
+
+app.listen(3000, () => {
+
+    console.log(
+        "Server running on port 3000"
+    );
+
+});
