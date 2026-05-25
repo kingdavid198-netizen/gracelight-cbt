@@ -284,19 +284,90 @@ body{
     background:red !important;
 }
 
-@media(max-width:900px){
+@media(max-width:768px){
 
-    .exam-container{
-        flex-direction:column;
-    }
+body{
+padding:10px;
+}
 
-    .question-text{
-        font-size:18px;
-    }
+.exam-container{
+flex-direction:column;
+gap:20px;
+}
 
-    #timer{
-        font-size:28px;
-    }
+.header{
+padding:20px;
+text-align:center;
+}
+
+.student-info{
+flex-direction:column;
+align-items:center;
+text-align:center;
+}
+
+.student-info img{
+width:100px;
+height:100px;
+margin-bottom:15px;
+}
+
+.question-container{
+padding:20px;
+}
+
+.question-text{
+font-size:28px;
+line-height:1.5;
+}
+
+.option{
+padding:18px;
+font-size:24px;
+margin-bottom:15px;
+}
+
+.option label{
+font-size:24px;
+}
+
+#timer{
+font-size:48px;
+text-align:center;
+}
+
+.nav-buttons{
+display:flex;
+flex-direction:column;
+gap:10px;
+}
+
+.nav-buttons button{
+width:100%;
+font-size:24px;
+padding:18px;
+}
+
+.palette button{
+width:55px;
+height:55px;
+font-size:20px;
+margin:5px;
+}
+
+.calculator{
+width:95%;
+left:2.5%;
+top:100px;
+padding:15px;
+}
+
+.calculator button{
+width:22%;
+height:60px;
+font-size:22px;
+margin:5px;
+}
 
 }
 
