@@ -7,12 +7,8 @@ const Question = require("./Question");
 
 const app = express();
 
-mongoose.connect(
-  "mongodb+srv://kingdavid198_db_user:C236Mi5SfOFPEK04@cluster0.mongodb.net/gracelight-cbt?retryWrites=true&w=majority"
-)
-
+mongoose.connect(process.env.MONGO_URI)
 .then(() => console.log("MongoDB Connected"))
-
 .catch(err => console.log(err));
 
 app.use(express.json());
