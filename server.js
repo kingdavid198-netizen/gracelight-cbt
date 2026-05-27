@@ -48,65 +48,73 @@ if (!fs.existsSync(questionsFile)) {
     fs.writeFileSync(questionsFile, "[]");
 }
 
-app.get("/topics/:subject", (req, res) => {
+app.get("/topics/:subject", async (req, res) => {
 
-    const subject = req.params.subject;
+    try {
 
-    const data = fs.readFileSync(
-        questionsFile,
-        "utf8"
-    );
+        const subject = req.params.subject;
 
-    const questions = JSON.parse(data);
+        const questions = await Question.find({
+            subject: subject
+        });
 
-    const topics = [
-        ...new Set(
-            questions
-            .filter(q => q.subject === subject)
-            .map(q => q.topic)
-        )
-    ];
+        const topics = [
+            ...new Set(
+                questions.map(q => q.topic)
+            )
+        ];
 
-    res.json(topics);
+        res.json(topics);
 
-});
+    } catch (error) {
 
-app.get("/questions", (req, res) => {
+        console.log(error);
 
-    const data = fs.readFileSync(
-        questionsFile,
-        "utf8"
-    );
+        res.json([]);
 
-    const questions = JSON.parse(data);
-
-    res.json(questions);
+    }
 
 });
 
-app.post("/add-question", (req, res) => {
+app.get("/questions", async (req, res) => {
 
-    const newQuestion = req.body;
+    try {
 
-    const data = fs.readFileSync(
-        questionsFile,
-        "utf8"
-    );
+        const questions = await Question.find();
 
-    const questions = JSON.parse(data);
+        res.json(questions);
 
-    newQuestion.id = Date.now();
+    } catch (error) {
 
-    questions.push(newQuestion);
+        console.log(error);
 
-    fs.writeFileSync(
-        questionsFile,
-        JSON.stringify(questions, null, 2)
-    );
+        res.json([]);
 
-    res.json({
-        success: true
-    });
+    }
+
+});
+
+app.post("/add-question", async (req, res) => {
+
+    try {
+
+        const newQuestion = new Question(req.body);
+
+        await newQuestion.save();
+
+        res.json({
+            success: true
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.json({
+            success: false
+        });
+
+    }
 
 });
 
@@ -191,29 +199,29 @@ app.delete("/delete-question/:id", (req, res) => {
 
 });
 
-app.get("/topics/:subject", (req, res) => {
-
-    const subject = req.params.subject;
+app.get("/subject-topics/:subject", async (req, res) => {
 
     try {
 
-        const data = fs.readFileSync("questions.json", "utf8");
+        const subject = req.params.subject;
 
-        const questions = JSON.parse(data);
+        const questions = await Question.find({
+            subject: subject
+        });
 
-        const filtered = questions.filter(
-            q => q.subject === subject
-        );
-
-        const topics = [...new Set(
-            filtered.map(q => q.topic)
-        )];
+        const topics = [
+            ...new Set(
+                questions.map(q => q.topic)
+            )
+        ];
 
         res.json(
             topics.map(topic => ({ topic }))
         );
 
     } catch (error) {
+
+        console.log(error);
 
         res.json([]);
 
