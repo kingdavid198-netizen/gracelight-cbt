@@ -3,6 +3,7 @@ const fs = require("fs");
 const multer = require("multer");
 const path = require("path");
 const mongoose = require("mongoose");
+const Question = require("./Question");
 
 const app = express();
 
