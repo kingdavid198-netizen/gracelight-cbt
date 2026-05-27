@@ -7,8 +7,12 @@ const Question = require("./Question");
 
 const app = express();
 
-mongoose.connect("mongodb://kingdavid198_db_user:C236Mi5SfOFPEK04@ac-lqc7g82-shard-00-00.bor0opc.mongodb.net:27017,ac-lqc7g82-shard-00-01.bor0opc.mongodb.net:27017,ac-lqc7g82-shard-00-02.bor0opc.mongodb.net:27017/?ssl=true&replicaSet=atlas-125o8c-shard-0&authSource=admin&appName=Cluster0")
+mongoose.connect(
+  "mongodb+srv://kingdavid198_db_user:C236Mi5SfOFPEK04@cluster0.mongodb.net/gracelight-cbt?retryWrites=true&w=majority"
+)
+
 .then(() => console.log("MongoDB Connected"))
+
 .catch(err => console.log(err));
 
 app.use(express.json());
