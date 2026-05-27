@@ -130,7 +130,9 @@ No PIN Generated
 <option value="D">D</option>
 </select>
 
-<button onclick="saveQuestion()">Save Question</button>
+<button id="saveBtn" onclick="saveQuestion()">
+Save Question
+</button>
 
 <div class="stats" id="statsBox">
 Total Questions: 0
@@ -142,7 +144,7 @@ Total Questions: 0
 
 <script>
 
-let editIndex = -1;
+let editIndex = null;
 
 async function saveQuestion(){
 
@@ -159,7 +161,7 @@ async function saveQuestion(){
 
     let url = "/add-question";
 
-    if(editIndex){
+    if(editIndex !== null){
         url = "/update-question/" + editIndex;
     }
 
@@ -182,6 +184,8 @@ async function saveQuestion(){
         alert("Question Saved");
 
         editIndex = null;
+
+        document.getElementById("saveBtn").innerText = "Save Question";
 
         loadQuestions();
 
@@ -269,6 +273,8 @@ async function editQuestion(id){
 
     editIndex = id;
 
+    document.getElementById("saveBtn").innerText = "Update Question";
+
     window.scrollTo({
         top: 0,
         behavior: "smooth"
@@ -282,9 +288,13 @@ async function deleteQuestion(id){
 
         const response = await fetch("/delete-question/" + id, {
 
-            method:"DELETE"
+    method:"DELETE",
 
-        });
+    headers:{
+        "Content-Type":"application/json"
+    }
+
+});
 
         const data = await response.json();
 
