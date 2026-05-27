@@ -9,7 +9,10 @@ const QuestionSchema = new mongoose.Schema({
     optionC: String,
     optionD: String,
     answer: String,
-    image: String
+    image: {
+    type: String,
+    default: ""
+}
 });
 
 module.exports = mongoose.model("Question", QuestionSchema);
