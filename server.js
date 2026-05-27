@@ -118,84 +118,50 @@ app.post("/add-question", async (req, res) => {
 
 });
 
-app.post("/update-question/:id", (req, res) => {
+app.post("/update-question/:id", async (req, res) => {
 
-    const id = Number(req.params.id);
+    try {
 
-    const {
-        subject,
-        topic,
-        question,
-        optionA,
-        optionB,
-        optionC,
-        optionD,
-        answer
-    } = req.body;
+        await Question.findByIdAndUpdate(
+            req.params.id,
+            req.body
+        );
 
-    const data = fs.readFileSync(
-        questionsFile,
-        "utf8"
-    );
-
-    let questions = JSON.parse(data);
-
-    const index = questions.findIndex(
-        q => q.id === id
-    );
-
-    if(index === -1){
-        return res.json({
-            success:false
+        res.json({
+            success: true
         });
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.json({
+            success: false
+        });
+
     }
-
-    questions[index] = {
-        id,
-        subject,
-        topic,
-        question,
-        optionA,
-        optionB,
-        optionC,
-        optionD,
-        answer
-    };
-
-    fs.writeFileSync(
-        questionsFile,
-        JSON.stringify(questions, null, 2)
-    );
-
-    res.json({
-        success:true
-    });
 
 });
 
-app.delete("/delete-question/:id", (req, res) => {
+app.delete("/delete-question/:id", async (req, res) => {
 
-    const id = Number(req.params.id);
+    try {
 
-    const data = fs.readFileSync(
-        questionsFile,
-        "utf8"
-    );
+        await Question.findByIdAndDelete(req.params.id);
 
-    let questions = JSON.parse(data);
+        res.json({
+            success: true
+        });
 
-    questions = questions.filter(
-        q => q.id !== id
-    );
+    } catch (error) {
 
-    fs.writeFileSync(
-        questionsFile,
-        JSON.stringify(questions, null, 2)
-    );
+        console.log(error);
 
-    res.json({
-        success: true
-    });
+        res.json({
+            success: false
+        });
+
+    }
 
 });
 
