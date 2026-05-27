@@ -146,73 +146,42 @@ let editIndex = -1;
 
 async function saveQuestion(){
 
-    const subject = document.getElementById("subject").value;
-    const topic = document.getElementById("topic").value;
-    const question = document.getElementById("question").value;
-    const optionA = document.getElementById("optionA").value;
-    const optionB = document.getElementById("optionB").value;
-    const optionC = document.getElementById("optionC").value;
-    const optionD = document.getElementById("optionD").value;
-    const answer = document.getElementById("answer").value;
-
-    if(
-        subject === "" ||
-        topic === "" ||
-        question === "" ||
-        optionA === "" ||
-        optionB === "" ||
-        optionC === "" ||
-        optionD === "" ||
-        answer === ""
-    ){
-        alert("Please fill all fields");
-        return;
-    }
+    const questionData = {
+        subject: document.getElementById("subject").value,
+        topic: document.getElementById("topic").value,
+        question: document.getElementById("question").value,
+        optionA: document.getElementById("optionA").value,
+        optionB: document.getElementById("optionB").value,
+        optionC: document.getElementById("optionC").value,
+        optionD: document.getElementById("optionD").value,
+        answer: document.getElementById("answer").value
+    };
 
     let url = "/add-question";
-let method = "POST";
 
-if(editIndex !== -1){
-    url = "/update-question/" + editIndex;
-    method = "POST";
-}
+    if(editIndex){
+        url = "/update-question/" + editIndex;
+    }
 
-const response = await fetch(url, {
+    const response = await fetch(url, {
 
-    method: method,
+        method:"POST",
 
-    headers:{
-        "Content-Type":"application/json"
-    },
+        headers:{
+            "Content-Type":"application/json"
+        },
 
-    body:JSON.stringify({
-        subject,
-        topic,
-        question,
-        optionA,
-        optionB,
-        optionC,
-        optionD,
-        answer
-    })
+        body: JSON.stringify(questionData)
 
-});
+    });
 
     const data = await response.json();
 
-    editIndex = -1;
-
     if(data.success){
 
-        alert("Question Saved Successfully");
+        alert("Question Saved");
 
-        document.getElementById("topic").value = "";
-        document.getElementById("question").value = "";
-        document.getElementById("optionA").value = "";
-        document.getElementById("optionB").value = "";
-        document.getElementById("optionC").value = "";
-        document.getElementById("optionD").value = "";
-        document.getElementById("answer").value = "";
+        editIndex = null;
 
         loadQuestions();
 
