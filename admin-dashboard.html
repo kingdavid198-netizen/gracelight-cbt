@@ -144,7 +144,7 @@ Total Questions: 0
 
 <script>
 
-let editIndex = null;
+let editId = null;
 
 async function saveQuestion(){
 
@@ -161,8 +161,8 @@ async function saveQuestion(){
 
     let url = "/add-question";
 
-    if(editIndex !== null){
-        url = "/update-question/" + editIndex;
+    if(editId !== null){
+        url = "/update-question/" + editId;
     }
 
     const response = await fetch(url, {
@@ -183,7 +183,7 @@ async function saveQuestion(){
 
         alert("Question Saved");
 
-        editIndex = null;
+        editId = null;
 
         document.getElementById("saveBtn").innerText = "Save Question";
 
@@ -271,7 +271,7 @@ async function editQuestion(id){
     document.getElementById("optionD").value = q.optionD;
     document.getElementById("answer").value = q.answer;
 
-    editIndex = id;
+    editId = id;
 
     document.getElementById("saveBtn").innerText = "Update Question";
 
