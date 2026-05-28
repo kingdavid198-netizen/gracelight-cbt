@@ -259,12 +259,12 @@ async function loadQuestions(){
         <b>Correct Answer:</b> ${q.answer}<br><br>
 
         <button class="edit-btn"
-        onclick="editQuestion(${q.id})">
+        onclick="editQuestion('${q._id}')">
         Edit
         </button>
 
         <button class="delete-btn"
-        onclick="deleteQuestion(${q.id})">
+       onclick="deleteQuestion('${q._id}')">
         Delete
         </button>
 
