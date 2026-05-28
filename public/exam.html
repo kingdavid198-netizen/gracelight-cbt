@@ -794,7 +794,7 @@ function updatePalette(){
 
 }
 
-function submitExam(){
+async function submitExam(){
 
     if(questions.length === 0){
 
@@ -863,16 +863,13 @@ date: new Date().toLocaleString()
 
 };
 
-let allResults =
-JSON.parse(localStorage.getItem("allResults")) || [];
-
-allResults.push(resultData);
-
-localStorage.setItem(
-"allResults",
-JSON.stringify(allResults)
-);
-
+await fetch("/save-result", {
+method: "POST",
+headers: {
+"Content-Type": "application/json"
+},
+body: JSON.stringify(resultData)
+});
 
 document.getElementById("examSection").innerHTML = `
     <div style="text-align:center; padding:60px;">
