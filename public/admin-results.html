@@ -63,7 +63,8 @@ background:#f9f9f9;
 <th>Score</th>
 <th>Percentage</th>
 <th>Remark</th>
-<th>Date</th>
+<th>Date</th> 
+<th>Action</th>
 </tr>
 </thead>
 
@@ -76,17 +77,24 @@ background:#f9f9f9;
 
 <script>
 
-const allResults =
-JSON.parse(localStorage.getItem("allResults")) || [];
+async function loadResults() {
 
 const resultsBody =
 document.getElementById("resultsBody");
+
+resultsBody.innerHTML = "";
+
+try {
+
+const response = await fetch("/results");
+
+const allResults = await response.json();
 
 if(allResults.length === 0){
 
 resultsBody.innerHTML = `
 <tr>
-<td colspan="7">No Results Found</td>
+<td colspan="8">No Results Found</td>
 </tr>
 `;
 
@@ -103,12 +111,83 @@ resultsBody.innerHTML += `
 <td>${result.percentage || 0}%</td>
 <td>${result.remark || "N/A"}</td>
 <td>${result.date || "N/A"}</td>
+
+<td>
+<button onclick="deleteResult('${result._id}')"
+style="
+background:red;
+color:white;
+border:none;
+padding:6px 10px;
+border-radius:5px;
+cursor:pointer;
+">
+Delete
+</button>
+</td>
+
 </tr>
 `;
 
 });
 
 }
+
+} catch(error){
+
+console.log(error);
+
+resultsBody.innerHTML = `
+<tr>
+<td colspan="8">Error Loading Results</td>
+</tr>
+`;
+
+}
+
+}
+
+async function deleteResult(id){
+
+const confirmDelete =
+confirm("Are you sure you want to delete this result?");
+
+if(!confirmDelete){
+return;
+}
+
+try{
+
+const response =
+await fetch(`/delete-result/${id}`, {
+method:"DELETE"
+});
+
+const data = await response.json();
+
+if(data.success){
+
+alert("Result deleted successfully");
+
+loadResults();
+
+}else{
+
+alert("Failed to delete result");
+
+}
+
+}catch(error){
+
+console.log(error);
+
+alert("Error deleting result");
+
+}
+
+}
+
+loadResults();
 
 </script>
 
