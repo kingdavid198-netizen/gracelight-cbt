@@ -232,12 +232,12 @@ async function loadQuestions(){
         <b>Correct Answer:</b> ${q.answer}<br><br>
 
         <button class="edit-btn"
-        onclick="editQuestion('${q._id}')">
+        onclick="editQuestion('${q.id || q._id}')">
         Edit
         </button>
 
         <button class="delete-btn"
-        onclick="deleteQuestion('${q._id}')">
+       onclick="deleteQuestion('${q.id || q._id}')">
         Delete
         </button>
 
@@ -255,7 +255,7 @@ async function editQuestion(id){
 
     const questions = await response.json();
 
-    const q = questions.find(item => item._id == id);
+    const q = questions.find(item => (item.id || item._id) == id);
 
     if(!q){
         alert("Question not found");
