@@ -4,6 +4,7 @@ const multer = require("multer");
 const path = require("path");
 const mongoose = require("mongoose");
 const Question = require("./Question");
+const Result = require("./Result");
 
 const app = express();
 
@@ -243,6 +244,74 @@ success:false
 });
 
 }
+
+});
+
+app.post("/save-result", async (req, res) => {
+
+    try {
+
+        const result = new Result(req.body);
+
+        await result.save();
+
+        res.json({
+            success: true
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.json({
+            success: false
+        });
+
+    }
+
+});
+
+
+
+app.get("/results", async (req, res) => {
+
+    try {
+
+        const results = await Result.find().sort({_id:-1});
+
+        res.json(results);
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.json([]);
+
+    }
+
+});
+
+
+
+app.delete("/delete-result/:id", async (req, res) => {
+
+    try {
+
+        await Result.findByIdAndDelete(req.params.id);
+
+        res.json({
+            success: true
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.json({
+            success: false
+        });
+
+    }
 
 });
 
