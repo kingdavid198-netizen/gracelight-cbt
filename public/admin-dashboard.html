@@ -143,7 +143,8 @@ Total Questions: 0
 <script>
 
 let editIndex = -1;
-
+let currentPin = "";
+    
 async function saveQuestion(){
 
     const subject = document.getElementById("subject").value;
@@ -362,7 +363,8 @@ if(data.success){
 
 document.getElementById("pinBox").innerHTML =
 "PIN: " + pin;
-
+currentPin = pin;
+    
 alert("PIN Generated Successfully");
 
 }else{
@@ -389,7 +391,7 @@ function loadLatestPin(){
 
             document.getElementById("pinBox").innerHTML =
             "PIN: " + latestPin;
-
+currentPin = latestPin;
         }
 
     });
