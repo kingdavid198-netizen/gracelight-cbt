@@ -250,28 +250,44 @@ app.get("/get-pin", async (req, res) => {
 
 });
 
-app.post("/use-pin", (req, res) => {
+app.post("/use-pin", async (req, res) => {
 
-const { pin } = req.body;
+    try {
 
-const foundPin =
-examPins.find(p => p.pin === pin);
+        const { pin } = req.body;
 
-if(foundPin){
+        const foundPin = await Pin.findOne({
+            pin: pin,
+            used: false
+        });
 
-foundPin.used = true;
+        if (foundPin) {
 
-res.json({
-success:true
-});
+            foundPin.used = true;
 
-}else{
+            await foundPin.save();
 
-res.json({
-success:false
-});
+            res.json({
+                success: true
+            });
 
-}
+        } else {
+
+            res.json({
+                success: false
+            });
+
+        }
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.json({
+            success: false
+        });
+
+    }
 
 });
 
