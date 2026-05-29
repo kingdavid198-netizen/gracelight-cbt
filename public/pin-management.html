@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>PIN Management</title>
+
+    <style>
+
+        body{
+            font-family: Arial, sans-serif;
+            padding:20px;
+            background:#f5f5f5;
+        }
+
+        h1{
+            text-align:center;
+        }
+
+        .stats{
+            display:flex;
+            gap:15px;
+            flex-wrap:wrap;
+            margin-bottom:20px;
+        }
+
+        .card{
+            background:white;
+            padding:20px;
+            border-radius:10px;
+            flex:1;
+            min-width:150px;
+            text-align:center;
+        }
+
+        table{
+            width:100%;
+            border-collapse:collapse;
+            background:white;
+        }
+
+        th,td{
+            padding:10px;
+            border:1px solid #ddd;
+            text-align:center;
+        }
+
+        button{
+            padding:8px 12px;
+            cursor:pointer;
+        }
+
+        .delete{
+            background:red;
+            color:white;
+            border:none;
+        }
+
+        .clear{
+            background:green;
+            color:white;
+            border:none;
+            margin-bottom:15px;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<h1>PIN Management</h1>
+
+<div class="stats">
+
+    <div class="card">
+        <h2 id="totalPins">0</h2>
+        <p>Total PINs</p>
+    </div>
+
+    <div class="card">
+        <h2 id="usedPins">0</h2>
+        <p>Used PINs</p>
+    </div>
+
+    <div class="card">
+        <h2 id="unusedPins">0</h2>
+        <p>Unused PINs</p>
+    </div>
+
+</div>
+
+<button class="clear" onclick="clearUsedPins()">
+    Clear Used PINs
+</button>
+
+<table>
+
+    <thead>
+
+        <tr>
+            <th>PIN</th>
+            <th>Status</th>
+            <th>Action</th>
+        </tr>
+
+    </thead>
+
+    <tbody id="pinTable">
+
+    </tbody>
+
+</table>
+<script>
+
+async function loadStats() {
+
+    const response = await fetch("/pin-stats");
+    const data = await response.json();
+
+    document.getElementById("totalPins").innerText = data.total;
+    document.getElementById("usedPins").innerText = data.used;
+    document.getElementById("unusedPins").innerText = data.unused;
+}
+
+async function loadPins() {
+
+    const response = await fetch("/all-pins");
+    const pins = await response.json();
+
+    const table = document.getElementById("pinTable");
+
+    table.innerHTML = "";
+
+    pins.forEach(pin => {
+
+        table.innerHTML += `
+        <tr>
+            <td>${pin.pin}</td>
+            <td>${pin.used ? "Used" : "Unused"}</td>
+            <td>
+                <button
+                    class="delete"
+                    onclick="deletePin('${pin._id}')">
+                    Delete
+                </button>
+            </td>
+        </tr>
+        `;
+    });
+}
+
+async function deletePin(id) {
+
+    if (!confirm("Delete this PIN?")) return;
+
+    await fetch(`/delete-pin/${id}`, {
+        method: "DELETE"
+    });
+
+    loadPins();
+    loadStats();
+}
+
+async function clearUsedPins() {
+
+    if (!confirm("Clear all used PINs?")) return;
+
+    await fetch("/clear-used-pins", {
+        method: "DELETE"
+    });
+
+    loadPins();
+    loadStats();
+}
+
+loadPins();
+loadStats();
+
+</script>
+
+</body>
+</html>
