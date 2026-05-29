@@ -198,8 +198,6 @@ app.get("/subject-topics/:subject", async (req, res) => {
 
 });
 
-let examPins = [];
-
 app.post("/save-pin", async (req, res) => {
 
     try {
