@@ -152,53 +152,65 @@ Print Result
 const studentName =
 localStorage.getItem("studentSearch");
 
-const allResults =
-JSON.parse(localStorage.getItem("allResults")) || [];
+async function loadStudentResult() {
 
-const student = allResults.find(r =>
+    try {
 
-r.candidateName &&
-r.candidateName.toLowerCase().trim() ===
-studentName.toLowerCase().trim()
+        const response = await fetch("/results");
+        const allResults = await response.json();
 
-);
+        const student = allResults.find(r =>
+            r.candidateName &&
+            r.candidateName.toLowerCase().trim() ===
+            studentName.toLowerCase().trim()
+        );
 
-if(student){
+        if(student){
 
-document.getElementById("studentInfo").innerHTML = `
+            document.getElementById("studentInfo").innerHTML = `
+                <p><strong>Candidate:</strong>
+                ${student.candidateName || "N/A"}</p>
 
-<p><strong>Candidate:</strong>
-${student.candidateName || "N/A"}</p>
+                <p><strong>Subject:</strong>
+                ${student.subject || "N/A"}</p>
 
-<p><strong>Subject:</strong>
-${student.subject || "N/A"}</p>
+                <p><strong>Topic:</strong>
+                ${student.topic || "N/A"}</p>
 
-<p><strong>Topic:</strong>
-${student.topic || "N/A"}</p>
+                <p><strong>Score:</strong>
+                <span class="score">
+                ${student.score || 0}/${student.totalQuestions || 0}
+                </span></p>
 
-<p><strong>Score:</strong>
-<span class="score">
-${student.score || 0}/${student.totalQuestions || 0}
-</span>
-</p>
+                <p><strong>Percentage:</strong>
+                ${student.percentage || 0}%</p>
 
-<p><strong>Percentage:</strong>
-${student.percentage || 0}%</p>
+                <p><strong>Remark:</strong>
+                ${student.remark || "N/A"}</p>
+            `;
 
-<p><strong>Remark:</strong>
-${student.remark || "N/A"}</p>
+        } else {
 
-`;
+            document.getElementById("studentInfo").innerHTML = `
+                <h2 style="color:red;text-align:center;">
+                    Result Not Found
+                </h2>
+            `;
+        }
 
-}else{
+    } catch(error){
 
-document.getElementById("studentInfo").innerHTML = `
-<h2 style="color:red;text-align:center;">
-Result Not Found
-</h2>
-`;
+        console.log(error);
 
+        document.getElementById("studentInfo").innerHTML = `
+            <h2 style="color:red;text-align:center;">
+                Error Loading Result
+            </h2>
+        `;
+    }
 }
+
+loadStudentResult();
 
 const resultPassport =
 document.getElementById("resultPassport");
