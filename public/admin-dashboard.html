@@ -374,8 +374,30 @@ alert("Error Saving PIN");
 });
 
 }
+function loadLatestPin(){
+
+    fetch("/get-pin")
+
+    .then(response => response.json())
+
+    .then(data => {
+
+        if(data.pins && data.pins.length > 0){
+
+            const latestPin =
+            data.pins[data.pins.length - 1].pin;
+
+            document.getElementById("pinBox").innerHTML =
+            "PIN: " + latestPin;
+
+        }
+
+    });
+
+}
 
 loadQuestions();
+loadLatestPin();
 
 </script>
 
