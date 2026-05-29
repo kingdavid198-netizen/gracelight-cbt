@@ -200,18 +200,31 @@ app.get("/subject-topics/:subject", async (req, res) => {
 
 let examPins = [];
 
-app.post("/save-pin", (req, res) => {
+app.post("/save-pin", async (req, res) => {
 
-const { pin } = req.body;
+    try {
 
-examPins.push({
-pin: pin,
-used: false
-});
+        const { pin } = req.body;
 
-res.json({
-success: true
-});
+        const newPin = new Pin({
+            pin: pin
+        });
+
+        await newPin.save();
+
+        res.json({
+            success: true
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.json({
+            success: false
+        });
+
+    }
 
 });
 
