@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 
 const ResultSchema = new mongoose.Schema({
-    candidate: String,
+    candidateName: String,
     subject: String,
     topic: String,
     score: Number,
