@@ -356,7 +356,103 @@ app.delete("/delete-result/:id", async (req, res) => {
     }
 
 });
+app.get("/all-pins", async (req, res) => {
 
+    try {
+
+        const pins = await Pin.find().sort({_id: -1});
+
+        res.json(pins);
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.json([]);
+
+    }
+
+});
+
+app.get("/pin-stats", async (req, res) => {
+
+    try {
+
+        const total = await Pin.countDocuments();
+
+        const used = await Pin.countDocuments({
+            used: true
+        });
+
+        const unused = await Pin.countDocuments({
+            used: false
+        });
+
+        res.json({
+            total,
+            used,
+            unused
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.json({
+            total: 0,
+            used: 0,
+            unused: 0
+        });
+
+    }
+
+});
+
+app.delete("/delete-pin/:id", async (req, res) => {
+
+    try {
+
+        await Pin.findByIdAndDelete(req.params.id);
+
+        res.json({
+            success: true
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.json({
+            success: false
+        });
+
+    }
+
+});
+
+app.delete("/clear-used-pins", async (req, res) => {
+
+    try {
+
+        await Pin.deleteMany({
+            used: true
+        });
+
+        res.json({
+            success: true
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.json({
+            success: false
+        });
+
+    }
+
+});
 app.listen(3000, () => {
 
     console.log(
