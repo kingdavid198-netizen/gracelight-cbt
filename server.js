@@ -228,11 +228,25 @@ app.post("/save-pin", async (req, res) => {
 
 });
 
-app.get("/get-pin", (req, res) => {
+app.get("/get-pin", async (req, res) => {
 
-res.json({
-pins: examPins
-});
+    try {
+
+        const pins = await Pin.find();
+
+        res.json({
+            pins
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.json({
+            pins: []
+        });
+
+    }
 
 });
 
