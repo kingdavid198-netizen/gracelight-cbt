@@ -5,6 +5,7 @@ const ResultSchema = new mongoose.Schema({
     subject: String,
     topic: String,
     score: Number,
+    totalQuestions: Number
     percentage: Number,
     remark: String,
     date: String
