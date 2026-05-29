@@ -217,7 +217,7 @@ Admin Login
 async function studentLogin(){
 
 const enteredPin =
-Number(document.getElementById("candidateName").value);
+document.getElementById("candidateName").value.trim();
 
 const response = await fetch("/get-pin");
 
