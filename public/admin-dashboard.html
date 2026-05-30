@@ -69,7 +69,7 @@ button:hover{
 }
 
 </style>
-
+<script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
 </head>
 
 <body>
@@ -147,11 +147,21 @@ Total Questions: 0
 let editIndex = -1;
 let currentPin = "";
     
+let questionEditor;
+
+ClassicEditor
+.create(document.querySelector('#question'))
+.then(editor => {
+    questionEditor = editor;
+})
+.catch(error => {
+    console.error(error);
+});    
 async function saveQuestion(){
 
     const subject = document.getElementById("subject").value;
     const topic = document.getElementById("topic").value;
-    const question = document.getElementById("question").value;
+    const question = questionEditor.getData();
     const optionA = document.getElementById("optionA").value;
     const optionB = document.getElementById("optionB").value;
     const optionC = document.getElementById("optionC").value;
@@ -210,7 +220,7 @@ const response = await fetch(url, {
         alert("Question Saved Successfully");
 
         document.getElementById("topic").value = "";
-        document.getElementById("question").value = "";
+        questionEditor.setData('');
         document.getElementById("optionA").value = "";
         document.getElementById("optionB").value = "";
         document.getElementById("optionC").value = "";
