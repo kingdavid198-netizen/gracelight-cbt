@@ -119,6 +119,11 @@ No PIN Generated
 
 <textarea id="question" placeholder="Enter Question"></textarea>
 
+    <label><strong>Question Image (Optional)</strong></label>
+
+<input type="file" id="questionImage" accept="image/*">
+
+<input type="hidden" id="imageUrl">
 <input type="text" id="optionA" placeholder="Option A">
 <input type="text" id="optionB" placeholder="Option B">
 <input type="text" id="optionC" placeholder="Option C">
@@ -144,6 +149,53 @@ Total Questions: 0
 
 <script>
 
+    document.addEventListener("DOMContentLoaded", () => {
+
+    const imageInput = document.getElementById("questionImage");
+
+    imageInput.addEventListener("change", async () => {
+
+        const file = imageInput.files[0];
+
+        if (!file) return;
+
+        const formData = new FormData();
+
+        formData.append("image", file);
+
+        try {
+
+            const response = await fetch("/upload-image", {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+
+                document.getElementById("imageUrl").value = data.imageUrl;
+
+                alert("Image uploaded successfully");
+
+            } else {
+
+                alert("Image upload failed");
+
+            }
+
+        } catch (err) {
+
+            console.error(err);
+
+            alert("Upload error");
+
+        }
+
+    });
+
+});
+
 let editIndex = -1;
 let currentPin = "";
     
@@ -167,7 +219,7 @@ async function saveQuestion(){
     const optionC = document.getElementById("optionC").value;
     const optionD = document.getElementById("optionD").value;
     const answer = document.getElementById("answer").value;
-
+    const imageUrl = document.getElementById("imageUrl").value;
     if(
         subject === "" ||
         topic === "" ||
@@ -198,16 +250,17 @@ const response = await fetch(url, {
         "Content-Type":"application/json"
     },
 
-    body:JSON.stringify({
-        subject,
-        topic,
-        question,
-        optionA,
-        optionB,
-        optionC,
-        optionD,
-        answer
-    })
+    body: JSON.stringify({
+    subject,
+    topic,
+    question,
+    imageUrl,
+    optionA,
+    optionB,
+    optionC,
+    optionD,
+    answer
+})
 
 });
 
@@ -263,6 +316,8 @@ async function loadQuestions(){
         <b>Topic:</b> ${q.topic}<br><br>
 
         <b>Question:</b> ${q.question}<br><br>
+
+        ${q.imageUrl ? `<img src="${q.imageUrl}" style="max-width:300px;display:block;margin-bottom:15px;">` : ""}
 
         A. ${q.optionA}<br>
         B. ${q.optionB}<br>
