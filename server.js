@@ -453,6 +453,28 @@ app.delete("/clear-used-pins", async (req, res) => {
     }
 
 });
+
+app.post(
+    "/upload-image",
+    upload.single("image"),
+    (req, res) => {
+
+        if (!req.file) {
+            return res.status(400).json({
+                success: false
+            });
+        }
+
+        res.json({
+            success: true,
+            url:
+                "/uploads/" +
+                req.file.filename
+        });
+
+    }
+);
+
 app.listen(3000, () => {
 
     console.log(
