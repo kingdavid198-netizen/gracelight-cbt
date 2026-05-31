@@ -651,8 +651,19 @@ function loadQuestion(){
         </div>
 
         <div class="question-text">
-            ${q.question}
-        </div>
+    ${q.question}
+</div>
+
+${q.imageUrl ? `
+<div class="question-image">
+    <img src="${q.imageUrl}"
+         alt="Question Image"
+         style="max-width:100%;
+                height:auto;
+                margin-top:15px;
+                border-radius:8px;" />
+</div>
+` : ""}
 
         <div class="option">
             <label>
