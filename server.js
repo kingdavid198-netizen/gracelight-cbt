@@ -51,6 +51,10 @@ const upload = multer({
     storage: storage
 });
 
+const excelUpload = multer({
+  storage: multer.memoryStorage()
+});
+
 const questionsFile = "questions.json";
 
 if (!fs.existsSync(questionsFile)) {
