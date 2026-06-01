@@ -208,6 +208,54 @@ app.get("/subject-topics/:subject", async (req, res) => {
 
 });
 
+app.post("/bulk-upload", excelUpload.single("file"), async (req, res) => {
+    try {
+
+        const workbook = XLSX.read(req.file.buffer, {
+            type: "buffer"
+        });
+
+        const sheetName = workbook.SheetNames[0];
+
+        const sheet = workbook.Sheets[sheetName];
+
+        const rows = XLSX.utils.sheet_to_json(sheet);
+
+        let uploadedCount = 0;
+
+        for (const row of rows) {
+
+            await Question.create({
+                subject: row.subject,
+                topic: row.topic,
+                question: row.question,
+                optionA: row.optionA,
+                optionB: row.optionB,
+                optionC: row.optionC,
+                optionD: row.optionD,
+                answer: row.answer
+            });
+
+            uploadedCount++;
+        }
+
+        res.json({
+            success: true,
+            count: uploadedCount
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.json({
+            success: false,
+            message: error.message
+        });
+
+    }
+});
+
 app.post("/save-pin", async (req, res) => {
 
     try {
