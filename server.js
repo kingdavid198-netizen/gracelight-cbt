@@ -6,6 +6,7 @@ const mongoose = require("mongoose");
 const Question = require("./Question");
 const Result = require("./Result");
 const Pin = require("./Pin");
+const cloudinary = require("./cloudinary");
 
 const app = express();
 
