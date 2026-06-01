@@ -480,6 +480,57 @@ currentPin = latestPin;
 
 }
 
+async function bulkUpload() {
+
+    const file =
+        document.getElementById("excelFile").files[0];
+
+    if (!file) {
+        alert("Please select a file");
+        return;
+    }
+
+    const formData = new FormData();
+
+    formData.append("file", file);
+
+    try {
+
+        const response = await fetch(
+            "/bulk-upload",
+            {
+                method: "POST",
+                body: formData
+            }
+        );
+
+        const data = await response.json();
+
+        if (data.success) {
+
+            alert(
+                data.count +
+                " questions uploaded successfully"
+            );
+
+            loadQuestions();
+
+        } else {
+
+            alert(
+                data.message ||
+                "Upload failed"
+            );
+        }
+
+    } catch (error) {
+
+        console.log(error);
+
+        alert("Upload failed");
+    }
+}
+    
 loadQuestions();
 loadLatestPin();
 
