@@ -460,24 +460,41 @@ app.delete("/clear-used-pins", async (req, res) => {
 });
 
 app.post(
-    "/upload-image",
-    upload.single("image"),
-    (req, res) => {
+  "/upload-image",
+  upload.single("image"),
+  async (req, res) => {
 
-        if (!req.file) {
-            return res.status(400).json({
-                success: false
-            });
-        }
+    try {
 
-        res.json({
-            success: true,
-            url:
-                "/uploads/" +
-                req.file.filename
+      if (!req.file) {
+        return res.status(400).json({
+          success: false
         });
+      }
+
+      const result = await cloudinary.uploader.upload(
+        req.file.path,
+        {
+          folder: "gracelight-cbt"
+        }
+      );
+
+      res.json({
+        success: true,
+        url: result.secure_url
+      });
+
+    } catch (error) {
+
+      console.log(error);
+
+      res.status(500).json({
+        success: false
+      });
 
     }
+
+  }
 );
 
 app.listen(3000, () => {
