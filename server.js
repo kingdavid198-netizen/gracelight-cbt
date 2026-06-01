@@ -502,6 +502,49 @@ app.post(
   }
 );
 
+app.post(
+  "/bulk-upload",
+  excelUpload.single("file"),
+  async (req, res) => {
+
+    try {
+
+      const workbook = XLSX.read(
+        req.file.buffer,
+        { type: "buffer" }
+      );
+
+      const sheetName =
+        workbook.SheetNames[0];
+
+      const sheet =
+        workbook.Sheets[sheetName];
+
+      const questions =
+        XLSX.utils.sheet_to_json(sheet);
+
+      await Question.insertMany(
+        questions
+      );
+
+      res.json({
+        success: true,
+        count: questions.length
+      });
+
+    } catch (error) {
+
+      console.log(error);
+
+      res.status(500).json({
+        success: false
+      });
+
+    }
+
+  }
+);
+
 app.listen(3000, () => {
 
     console.log(
