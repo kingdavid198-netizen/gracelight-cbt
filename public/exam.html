@@ -575,6 +575,7 @@ document.getElementById("topicName").innerHTML = "Topic: " + selectedTopic;
 
 let questions = [];
 let currentQuestion = 0;
+let examTerminated = false;    
 var answers =
 JSON.parse(localStorage.getItem("examAnswers")) || [];
 let timer; 
@@ -584,11 +585,16 @@ sessionStorage.getItem("pageReloaded");
 
 if (pageReloaded === "true") {
 
-    alert(
-        "Exam terminated. Page refresh detected."
-    );
+    examTerminated = true;
 
-    submitExam(true);
+    alert("Exam terminated. Page refresh detected.");
+
+    localStorage.removeItem("examTime");
+localStorage.removeItem("examAnswers");
+localStorage.removeItem("exitCount");
+
+    document.body.innerHTML =
+        "<h1 style='color:red;text-align:center;margin-top:100px'>EXAM TERMINATED</h1>";
 }
 
 sessionStorage.setItem(
@@ -1115,9 +1121,10 @@ document.addEventListener("visibilitychange", function () {
 
 });  
 
-loadQuestions();
-
-startTimer();
+if (!examTerminated) {
+    loadQuestions();
+    startTimer();
+}
 
 </script>
 
