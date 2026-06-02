@@ -824,10 +824,8 @@ async function submitExam(forceSubmit = false){
 
     if(!forceSubmit){
 
-    if(!confirm("Submit Exam?")){
-
+    if(!confirm("Are you sure you want to submit this exam?")){
         return;
-
     }
 
 }
@@ -936,7 +934,9 @@ if (timer) {
 localStorage.removeItem("examTime");
 localStorage.removeItem("examAnswers");
 localStorage.removeItem("exitCount");    
-time = 40 * 60;    
+time = 40 * 60; 
+    
+examFinished = true;
     
 setTimeout(() => {
     window.location.href = "index.html";
@@ -1028,12 +1028,20 @@ function calculate(){
     }
 
 }
-
+    
+let examFinished = false;
+    
 let exitCount = parseInt(localStorage.getItem("exitCount")) || 0;
 
 window.addEventListener("beforeunload", function (e) {
+
+    if(examFinished){
+        return;
+    }
+
     e.preventDefault();
     e.returnValue = "";
+
 });
 
 document.addEventListener("visibilitychange", function () {
@@ -1049,7 +1057,7 @@ document.addEventListener("visibilitychange", function () {
             + exitCount
         );
 
-        if (exitCount >= 3) {
+        if(exitCount === 3){
 
             alert(
                 "Exam terminated for repeated exits."
