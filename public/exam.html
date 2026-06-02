@@ -812,7 +812,7 @@ function updatePalette(){
 
 }
 
-async function submitExam(){
+async function submitExam(forceSubmit = false){
 
     if(questions.length === 0){
 
@@ -822,11 +822,15 @@ async function submitExam(){
 
     }
 
+    if(!forceSubmit){
+
     if(!confirm("Submit Exam?")){
 
         return;
 
     }
+
+}
 
     let score = 0;
 
@@ -1051,7 +1055,7 @@ document.addEventListener("visibilitychange", function () {
                 "Exam terminated for repeated exits."
             );
 
-            submitExam();
+            submitExam(true);
         }
     }
 });    
