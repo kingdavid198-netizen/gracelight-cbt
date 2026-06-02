@@ -577,6 +577,7 @@ let questions = [];
 let currentQuestion = 0;
 var answers =
 JSON.parse(localStorage.getItem("examAnswers")) || [];
+let timer;    
 
 async function loadQuestions(){
 
@@ -922,7 +923,9 @@ if(instructions) instructions.style.display = "none";
 
 const palette = document.getElementById("paletteSection");
 if(palette) palette.style.display = "none";
-
+    
+clearInterval(timer);
+    
 localStorage.removeItem("examTime");
 localStorage.removeItem("examAnswers");    
     
@@ -938,7 +941,7 @@ let time = localStorage.getItem("examTime")
 
 function startTimer(){
 
-    const timer = setInterval(function(){
+    timer = setInterval(function(){
 
         let minutes = Math.floor(time / 60);
 
