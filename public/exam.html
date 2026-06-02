@@ -931,6 +931,7 @@ if (timer) {
     
 localStorage.removeItem("examTime");
 localStorage.removeItem("examAnswers");
+localStorage.removeItem("exitCount");    
 time = 40 * 60;    
     
 setTimeout(() => {
@@ -1023,6 +1024,37 @@ function calculate(){
     }
 
 }
+
+let exitCount = parseInt(localStorage.getItem("exitCount")) || 0;
+
+window.addEventListener("beforeunload", function (e) {
+    e.preventDefault();
+    e.returnValue = "";
+});
+
+document.addEventListener("visibilitychange", function () {
+
+    if (document.hidden) {
+
+        exitCount++;
+
+        localStorage.setItem("exitCount", exitCount);
+
+        alert(
+            "Warning! You left the examination page. Attempt: "
+            + exitCount
+        );
+
+        if (exitCount >= 3) {
+
+            alert(
+                "Exam terminated for repeated exits."
+            );
+
+            submitExam();
+        }
+    }
+});    
 
 loadQuestions();
 
