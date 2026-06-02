@@ -1046,6 +1046,10 @@ window.addEventListener("beforeunload", function (e) {
 
 document.addEventListener("visibilitychange", function () {
 
+    if(examFinished){
+        return;
+    }
+
     if (document.hidden) {
 
         exitCount++;
@@ -1057,16 +1061,19 @@ document.addEventListener("visibilitychange", function () {
             + exitCount
         );
 
-        if(exitCount === 3){
+        if (exitCount === 3) {
 
             alert(
                 "Exam terminated for repeated exits."
             );
 
             submitExam(true);
+
         }
+
     }
-});    
+
+});  
 
 loadQuestions();
 
