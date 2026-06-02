@@ -575,7 +575,8 @@ document.getElementById("topicName").innerHTML = "Topic: " + selectedTopic;
 
 let questions = [];
 let currentQuestion = 0;
-var answers = [];
+var answers =
+JSON.parse(localStorage.getItem("examAnswers")) || [];
 
 async function loadQuestions(){
 
@@ -722,6 +723,11 @@ ${q.image ? `
 function saveAnswer(answer){
 
     answers[currentQuestion] = answer;
+
+    localStorage.setItem(
+        "examAnswers",
+        JSON.stringify(answers)
+    );
 
     updatePalette();
 
@@ -918,6 +924,7 @@ const palette = document.getElementById("paletteSection");
 if(palette) palette.style.display = "none";
 
 localStorage.removeItem("examTime");
+localStorage.removeItem("examAnswers");    
     
 setTimeout(() => {
     window.location.href = "index.html";
