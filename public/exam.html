@@ -924,10 +924,14 @@ if(instructions) instructions.style.display = "none";
 const palette = document.getElementById("paletteSection");
 if(palette) palette.style.display = "none";
     
-clearInterval(timer);
+if (timer) {
+    clearInterval(timer);
+    timer = null;
+}
     
 localStorage.removeItem("examTime");
-localStorage.removeItem("examAnswers");    
+localStorage.removeItem("examAnswers");
+time = 40 * 60;    
     
 setTimeout(() => {
     window.location.href = "index.html";
