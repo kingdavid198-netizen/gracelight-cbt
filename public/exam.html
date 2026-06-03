@@ -578,29 +578,7 @@ let currentQuestion = 0;
 let examTerminated = false;    
 var answers =
 JSON.parse(localStorage.getItem("examAnswers")) || [];
-let timer; 
-
-let pageReloaded =
-sessionStorage.getItem("pageReloaded");
-
-if (pageReloaded === "true") {
-
-    examTerminated = true;
-
-    alert("Exam terminated. Page refresh detected.");
-
-    localStorage.removeItem("examTime");
-localStorage.removeItem("examAnswers");
-localStorage.removeItem("exitCount");
-
-    document.body.innerHTML =
-        "<h1 style='color:red;text-align:center;margin-top:100px'>EXAM TERMINATED</h1>";
-}
-
-sessionStorage.setItem(
-    "pageReloaded",
-    "true"
-);    
+let timer;    
 
 async function loadQuestions(){
 
@@ -1055,40 +1033,7 @@ function calculate(){
     
 let examFinished = false;
     
-let exitCount = parseInt(localStorage.getItem("exitCount")) || 0;
-
-if (sessionStorage.getItem("pageReloaded") === "true") {
-
-    exitCount++;
-
-    localStorage.setItem("exitCount", exitCount);
-
-    sessionStorage.removeItem("pageReloaded");
-
-    alert(
-        "Warning! Page refresh detected. Attempt: " +
-        exitCount
-    );
-
-    if (exitCount >= 3) {
-
-        alert("Exam terminated for repeated refreshes.");
-
-        submitExam(true);
-    }
-}    
-
-window.addEventListener("beforeunload", function (e) {
-
-    if (examFinished) {
-        return;
-    }
-
-    sessionStorage.setItem("pageReloaded", "true");
-
-    e.preventDefault();
-    e.returnValue = "";
-});
+let exitCount = parseInt(localStorage.getItem("exitCount")) || 0;  
 
 document.addEventListener("visibilitychange", function () {
 
