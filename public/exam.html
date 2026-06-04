@@ -395,6 +395,13 @@ margin-bottom:0px;
 
 <body>
 
+<script>
+if(localStorage.getItem("examAuthorized") !== "true"){
+    alert("Access Denied! Please login with a valid PIN.");
+    window.location.href = "login.html";
+}
+</script>    
+
 <div class="header">
     GraceLight CBT Examination
 </div>
