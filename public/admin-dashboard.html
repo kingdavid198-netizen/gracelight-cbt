@@ -85,6 +85,10 @@ if(localStorage.getItem("adminAuthorized") !== "true"){
 
 <h1>GraceLight CBT Admin Dashboard</h1>
 
+<button onclick="logoutAdmin()" style="background:red; margin-bottom:15px;">
+    Logout
+</button>    
+
 <h2>Generate Exam PIN</h2>
 
 <button onclick="generatePin()">
@@ -540,6 +544,11 @@ async function bulkUpload() {
     
 loadQuestions();
 loadLatestPin();
+
+function logoutAdmin(){
+    localStorage.removeItem("adminAuthorized");
+    window.location.href = "login.html";
+}    
 
 </script>
 
