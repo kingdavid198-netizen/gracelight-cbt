@@ -74,6 +74,13 @@ button:hover{
 
 <body>
 
+<script>
+if(localStorage.getItem("adminAuthorized") !== "true"){
+    alert("Access Denied! Please login as Admin.");
+    window.location.href = "login.html";
+}
+</script>
+    
 <div class="container">
 
 <h1>GraceLight CBT Admin Dashboard</h1>
