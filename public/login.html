@@ -271,6 +271,7 @@ function adminLogin(){
 const password=prompt("Enter Admin Password");
 
 if(password==="AYOdeji1975#"){
+localStorage.setItem("adminAuthorized","true");
 window.location.href="admin-dashboard.html";
 }else{
 alert("Wrong Password");
