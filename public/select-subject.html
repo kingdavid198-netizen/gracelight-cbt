@@ -95,6 +95,13 @@ margin-top:18px;
 
 <body>
 
+<script>
+if(localStorage.getItem("examAuthorized") !== "true"){
+    alert("Access Denied! Please enter a valid exam PIN.");
+    window.location.href = "login.html";
+}
+</script>  
+
 <div class="container">
 
 <h1>GraceLight CBT</h1>
