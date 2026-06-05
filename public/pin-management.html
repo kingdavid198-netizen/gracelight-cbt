@@ -116,6 +116,24 @@ th{
     background:#166534;
 }
 
+ .used-badge{
+    background:#dc2626;
+    color:white;
+    padding:6px 12px;
+    border-radius:20px;
+    font-size:13px;
+    font-weight:bold;
+}
+
+.unused-badge{
+    background:#16a34a;
+    color:white;
+    padding:6px 12px;
+    border-radius:20px;
+    font-size:13px;
+    font-weight:bold;
+}       
+
     </style>
 
 </head>
@@ -190,7 +208,11 @@ async function loadPins() {
         table.innerHTML += `
         <tr>
             <td>${pin.pin}</td>
-            <td>${pin.used ? "Used" : "Unused"}</td>
+            <td>
+${pin.used
+ ? '<span class="used-badge">Used</span>'
+ : '<span class="unused-badge">Unused</span>'}
+</td>
             <td>
                 <button
                     class="delete"
