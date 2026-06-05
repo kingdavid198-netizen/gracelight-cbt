@@ -142,6 +142,14 @@ tbody tr:hover{
     border-radius:20px;
     font-size:13px;
     font-weight:bold;
+}   
+
+ .table-container{
+    background:white;
+    padding:20px;
+    border-radius:15px;
+    box-shadow:0 8px 20px rgba(0,0,0,0.08);
+    margin-top:20px;
 }       
 
     </style>
@@ -175,6 +183,8 @@ tbody tr:hover{
     Clear Used PINs
 </button>
 
+<div class="table-container">
+
 <table>
 
     <thead>
@@ -192,6 +202,7 @@ tbody tr:hover{
     </tbody>
 
 </table>
+</div>
 <script>
 
 async function loadStats() {
