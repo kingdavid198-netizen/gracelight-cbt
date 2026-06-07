@@ -951,7 +951,7 @@ localStorage.removeItem("examAnswers");
 localStorage.removeItem("exitCount");
 localStorage.removeItem("examAuthorized");
 sessionStorage.removeItem("pageReloaded");  
-time = 1 * 60; 
+time = 30 * 60; 
     
 examFinished = true;
     
@@ -963,7 +963,7 @@ setTimeout(() => {
 
 let time = localStorage.getItem("examTime")
     ? parseInt(localStorage.getItem("examTime"))
-    : 1 * 60;
+    : 30 * 60;
 
 function startTimer(){
 
