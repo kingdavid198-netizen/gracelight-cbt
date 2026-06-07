@@ -822,6 +822,13 @@ function updatePalette(){
 
 async function submitExam(forceSubmit = false){
 
+    examFinished = true;
+
+if(timer){
+    clearInterval(timer);
+    timer = null;
+}
+
     if(questions.length === 0){
 
         alert("No exam questions available.");
@@ -985,9 +992,8 @@ localStorage.setItem("examTime", time);
 
     localStorage.removeItem("examTime");
 
-    alert("Time Up! Exam will be submitted automatically.");
-
-    submitExam();
+    alert("Time Up!");
+submitExam(true);
 
     return;
 }
