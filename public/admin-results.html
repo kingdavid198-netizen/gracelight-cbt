@@ -426,6 +426,13 @@ if (imageFile) {
 
                     <p>${formula.content}</p>
 
+${formula.image ? `
+<img
+    src="${formula.image}"
+    style="max-width:300px;display:block;margin-top:10px;margin-bottom:10px;"
+>
+` : ""}
+
                     <button
                         onclick="deleteFormula('${formula._id}')"
                     >
