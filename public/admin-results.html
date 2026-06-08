@@ -321,6 +321,138 @@ alert("Error deleting result");
 
 loadResults();
 
+document.getElementById("saveFormulaBtn")
+.onclick = async function () {
+
+    const subject =
+        document.getElementById("formulaSubject").value;
+
+    const title =
+        document.getElementById("formulaTitle").value;
+
+    const content =
+        document.getElementById("formulaContent").value;
+
+    if (!title || !content) {
+
+        alert("Please enter formula title and content");
+
+        return;
+
+    }
+
+    try {
+
+        const response = await fetch("/formulas", {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+                subject,
+                title,
+                content
+            })
+
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+
+            alert("Formula Saved Successfully");
+
+            document.getElementById("formulaTitle").value = "";
+
+            document.getElementById("formulaContent").value = "";
+
+            loadFormulas();
+
+        }
+
+    } catch (error) {
+
+        console.log(error);
+
+        alert("Error Saving Formula");
+
+    }
+
+};
+
+    async function loadFormulas() {
+
+    const formulaList =
+        document.getElementById("formulaList");
+
+    formulaList.innerHTML = "";
+
+    try {
+
+        const response =
+            await fetch("/formulas");
+
+        const formulas =
+            await response.json();
+
+        formulas.forEach(formula => {
+
+            formulaList.innerHTML += `
+
+                <div style="
+                    border:1px solid #ddd;
+                    padding:15px;
+                    margin-bottom:10px;
+                    border-radius:8px;
+                ">
+
+                    <b>${formula.subject}</b>
+
+                    <h3>${formula.title}</h3>
+
+                    <p>${formula.content}</p>
+
+                    <button
+                        onclick="deleteFormula('${formula._id}')"
+                    >
+                        Delete
+                    </button>
+
+                </div>
+
+            `;
+
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+    }
+
+}
+
+    async function deleteFormula(id) {
+
+    if (!confirm("Delete this formula?")) {
+
+        return;
+
+    }
+
+    await fetch(`/formulas/${id}`, {
+    method: "DELETE"
+});
+
+    loadFormulas();
+
+}
+
+    loadFormulas();
+
 </script>
 
 </body>
