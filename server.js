@@ -7,6 +7,7 @@ const mongoose = require("mongoose");
 const Question = require("./Question");
 const Result = require("./Result");
 const Pin = require("./Pin");
+const Formula = require("./Formula");
 const cloudinary = require("./cloudinary");
 
 const app = express();
@@ -84,6 +85,77 @@ app.get("/topics/:subject", async (req, res) => {
         console.log(error);
 
         res.json([]);
+
+    }
+
+});
+
+app.post("/formulas", async (req, res) => {
+
+    try {
+
+        const formula = new Formula({
+            subject: req.body.subject,
+            title: req.body.title,
+            content: req.body.content
+        });
+
+        await formula.save();
+
+        res.json({
+            success: true
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.status(500).json({
+            success: false
+        });
+
+    }
+
+});
+
+app.get("/formulas", async (req, res) => {
+
+    try {
+
+        const formulas = await Formula.find()
+            .sort({ subject: 1 });
+
+        res.json(formulas);
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.json([]);
+
+    }
+
+});
+
+app.delete("/formulas/:id", async (req, res) => {
+
+    try {
+
+        await Formula.findByIdAndDelete(
+            req.params.id
+        );
+
+        res.json({
+            success: true
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.status(500).json({
+            success: false
+        });
 
     }
 
