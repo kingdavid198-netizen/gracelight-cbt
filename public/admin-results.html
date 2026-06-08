@@ -339,6 +339,19 @@ document.getElementById("saveFormulaBtn")
     const content =
         document.getElementById("formulaContent").value;
 
+    const imageFile =
+document.getElementById("formulaImage").files[0];
+
+const formData = new FormData();
+
+formData.append("subject", subject);
+formData.append("title", title);
+formData.append("content", content);
+
+if (imageFile) {
+    formData.append("image", imageFile);
+}
+
     if (!title || !content) {
 
         alert("Please enter formula title and content");
@@ -353,15 +366,7 @@ document.getElementById("saveFormulaBtn")
 
             method: "POST",
 
-            headers: {
-                "Content-Type": "application/json"
-            },
-
-            body: JSON.stringify({
-                subject,
-                title,
-                content
-            })
+            body: formData
 
         });
 
