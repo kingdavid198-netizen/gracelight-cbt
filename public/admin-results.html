@@ -52,8 +52,18 @@ background:#f9f9f9;
 
 <div class="container">
 
-<h1>All Candidates Results</h1>
+<div class="admin-tabs">
+    <button id="showResultsBtn" class="active-tab">
+        📊 Results
+    </button>
 
+    <button id="showFormulaBtn">
+        📘 Formula Manager
+    </button>
+</div>
+
+<h1 id="pageTitle">All Candidates Results</h1>
+<div id="resultsSection">
 <table>
 <thead>
 <tr>
@@ -75,7 +85,70 @@ background:#f9f9f9;
 
 </div>
 
+<div id="formulaSection" style="display:none;">
+
+    <h1>Formula Manager</h1>
+
+    <select id="formulaSubject">
+        <option value="Mathematics">Mathematics</option>
+        <option value="Physics">Physics</option>
+        <option value="Chemistry">Chemistry</option>
+        <option value="Biology">Biology</option>
+    </select>
+
+    <br><br>
+
+    <input
+        type="text"
+        id="formulaTitle"
+        placeholder="Formula Title"
+        style="width:100%;padding:10px;"
+    >
+
+    <br><br>
+
+    <textarea
+        id="formulaContent"
+        placeholder="Enter Formula"
+        rows="5"
+        style="width:100%;padding:10px;"
+    ></textarea>
+
+    <br><br>
+
+    <button id="saveFormulaBtn">
+        Save Formula
+    </button>
+
+    <hr>
+
+    <div id="formulaList"></div>
+
+</div>  
+
 <script>
+
+document.getElementById("showResultsBtn").onclick = function () {
+
+    document.getElementById("resultsSection").style.display = "block";
+
+    document.getElementById("formulaSection").style.display = "none";
+
+    document.getElementById("pageTitle").innerText =
+        "All Candidates Results";
+
+};
+
+document.getElementById("showFormulaBtn").onclick = function () {
+
+    document.getElementById("resultsSection").style.display = "none";
+
+    document.getElementById("formulaSection").style.display = "block";
+
+    document.getElementById("pageTitle").innerText =
+        "Formula Manager";
+
+};  
 
 async function loadResults() {
 
