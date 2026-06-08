@@ -90,15 +90,16 @@ app.get("/topics/:subject", async (req, res) => {
 
 });
 
-app.post("/formulas", async (req, res) => {
+app.post("/formulas", upload.single("image"), async (req, res) => {
 
     try {
 
         const formula = new Formula({
-            subject: req.body.subject,
-            title: req.body.title,
-            content: req.body.content
-        });
+    subject: req.body.subject,
+    title: req.body.title,
+    content: req.body.content,
+    image: req.file ? "/uploads/" + req.file.filename : ""
+});
 
         await formula.save();
 
