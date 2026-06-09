@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Formula & Laws - GraceLight CBT</title>
+<title>Formulas & Laws - GraceLight CBT</title>
 
 <style>
 body{
@@ -126,6 +126,9 @@ async function loadFormulas(){
         const formulas =
         await response.json();
 
+        const selected =
+document.getElementById("subjectFilter").value;
+
         formulaList.innerHTML = "";
 
         if(formulas.length === 0){
@@ -136,7 +139,18 @@ async function loadFormulas(){
             return;
         }
 
-        formulas.forEach(formula => {
+        formulas
+.filter(formula => {
+
+    const selected =
+    document.getElementById("subjectFilter").value;
+
+    return selected === "all" ||
+    formula.subject.toLowerCase() ===
+    selected.toLowerCase();
+
+})
+.forEach(formula => {
 
             formulaList.innerHTML += `
 
@@ -181,6 +195,10 @@ async function loadFormulas(){
     }
 
 }
+
+ function filterFormulas() {
+    loadFormulas();
+}   
 
 loadFormulas();
 
