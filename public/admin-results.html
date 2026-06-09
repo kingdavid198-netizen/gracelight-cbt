@@ -344,7 +344,7 @@ document.getElementById("saveFormulaBtn")
         document.getElementById("formulaTitle").value;
 
     const content =
-        document.getElementById("formulaContent").value;
+CKEDITOR.instances.formulaContent.getData();
 
     const imageFile =
 document.getElementById("formulaImage").files[0];
@@ -385,7 +385,7 @@ if (imageFile) {
 
             document.getElementById("formulaTitle").value = "";
 
-            document.getElementById("formulaContent").value = "";
+            CKEDITOR.instances.formulaContent.setData('');
 
             loadFormulas();
 
