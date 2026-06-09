@@ -91,6 +91,17 @@ h1{
     </div>
 
     <h1>📚 Formula & Laws</h1>
+    <select id="subjectFilter" onchange="filterFormulas()">
+    <option value="all">All Subjects</option>
+    <option value="Account">Account</option>
+    <option value="Agricultural Science">Agricultural Science</option>
+    <option value="Biology">Biology</option>
+    <option value="Chemistry">Chemistry</option>
+    <option value="Economics">Economics</option>
+    <option value="Further Mathematics">Further Mathematics</option>
+    <option value="Mathematics">Mathematics</option>
+    <option value="Physics">Physics</option>
+</select>
 
     <div id="formulaList" class="loading">
         Loading formulas...
