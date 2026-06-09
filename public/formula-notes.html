@@ -1,1 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+<title>Formula & Laws - GraceLight CBT</title>
+
+<style>
+body{
+    font-family: Arial, sans-serif;
+    background:#f4f7fc;
+    margin:0;
+    padding:20px;
+}
+
+.container{
+    max-width:1000px;
+    margin:auto;
+}
+
+h1{
+    text-align:center;
+    color:#2962ff;
+}
+
+.topbar{
+    text-align:center;
+    margin-bottom:20px;
+}
+
+.homeBtn{
+    background:#2962ff;
+    color:white;
+    border:none;
+    padding:10px 20px;
+    border-radius:6px;
+    cursor:pointer;
+}
+
+.card{
+    background:white;
+    border:1px solid #ddd;
+    border-radius:10px;
+    padding:20px;
+    margin-bottom:20px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.08);
+}
+
+.subject{
+    color:#2962ff;
+    font-weight:bold;
+    font-size:18px;
+}
+
+.title{
+    font-size:24px;
+    margin-top:10px;
+    margin-bottom:10px;
+}
+
+.content{
+    line-height:1.7;
+    font-size:17px;
+}
+
+.formula-image{
+    max-width:100%;
+    margin-top:15px;
+    border-radius:8px;
+    border:1px solid #ddd;
+}
+
+.loading{
+    text-align:center;
+    font-size:18px;
+    color:#666;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="topbar">
+        <button class="homeBtn"
+        onclick="location.href='index.html'">
+            ← Back Home
+        </button>
+    </div>
+
+    <h1>📚 Formula & Laws</h1>
+
+    <div id="formulaList" class="loading">
+        Loading formulas...
+    </div>
+
+</div>
+
+<script>
+
+async function loadFormulas(){
+
+    const formulaList =
+    document.getElementById("formulaList");
+
+    formulaList.innerHTML = "Loading formulas...";
+
+    try{
+
+        const response =
+        await fetch("/formulas");
+
+        const formulas =
+        await response.json();
+
+        formulaList.innerHTML = "";
+
+        if(formulas.length === 0){
+
+            formulaList.innerHTML =
+            "<p>No formulas available.</p>";
+
+            return;
+        }
+
+        formulas.forEach(formula => {
+
+            formulaList.innerHTML += `
+
+            <div class="card">
+
+                <div class="subject">
+                    ${formula.subject || ""}
+                </div>
+
+                <div class="title">
+                    ${formula.title || ""}
+                </div>
+
+                <div class="content">
+                    ${formula.content || ""}
+                </div>
+
+                ${
+                    formula.image
+                    ?
+                    `<img src="${formula.image}"
+                    class="formula-image">`
+                    :
+                    ""
+                }
+
+            </div>
+
+            `;
+
+        });
+
+    }
+
+    catch(error){
+
+        console.log(error);
+
+        formulaList.innerHTML =
+        "<p>Error loading formulas.</p>";
+
+    }
+
+}
+
+loadFormulas();
+
+</script>
+
+</body>
+</html>
