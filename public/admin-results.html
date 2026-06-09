@@ -341,12 +341,14 @@ document.getElementById("saveFormulaBtn")
         document.getElementById("formulaSubject").value;
 
     const title =
-        document.getElementById("formulaTitle").value;
+document.getElementById("formulaTitle").value;
 
-    const content =
-CKEDITOR.instances.formulaContent.getData();
+CKEDITOR.instances['formulaContent'].updateElement();
 
-    const imageFile =
+const content =
+document.getElementById("formulaContent").value;
+
+const imageFile =
 document.getElementById("formulaImage").files[0];
 
 const formData = new FormData();
@@ -359,7 +361,7 @@ if (imageFile) {
     formData.append("image", imageFile);
 }
 
-    if (!title || !content) {
+    if (!title || content.trim() === "") {
 
         alert("Please enter formula title and content");
 
