@@ -162,6 +162,59 @@ app.delete("/formulas/:id", async (req, res) => {
 
 });
 
+app.post("/bulk-formulas", upload.single("file"), async (req, res) => {
+
+    try {
+
+        const workbook = XLSX.readFile(req.file.path);
+
+        const sheet =
+            workbook.Sheets[
+                workbook.SheetNames[0]
+            ];
+
+        const rows =
+            XLSX.utils.sheet_to_json(sheet);
+
+        let count = 0;
+
+        for (const row of rows) {
+
+            await Formula.create({
+
+                subject: row.Subject || "",
+
+                title: row.Title || "",
+
+                content: row.Content || "",
+
+                image: row.Image || ""
+
+            });
+
+            count++;
+
+        }
+
+        fs.unlinkSync(req.file.path);
+
+        res.json({
+            success: true,
+            count
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.status(500).json({
+            success: false
+        });
+
+    }
+
+});
+
 app.get("/questions", async (req, res) => {
 
     try {
