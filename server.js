@@ -181,14 +181,11 @@ app.post("/bulk-formulas", upload.single("file"), async (req, res) => {
         for (const row of rows) {
 
             await Formula.create({
-
-                subject: row.Subject || "",
-
-                title: row.Title || "",
-
-                content: row.Content || "",
-
-                image: row.Image || ""
+                
+subject: row.Subject || row.subject || "", 
+title: row.Title || row.title || "",
+content: row.Content || row.content || "",
+image: row.Image || row.image || ""
 
             });
 
