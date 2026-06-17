@@ -94,14 +94,29 @@ app.post("/formulas", upload.single("image"), async (req, res) => {
 
     try {
 
-        const formula = new Formula({
-    subject: req.body.subject,
-    title: req.body.title,
-    content: req.body.content,
-    image: req.file ? "/uploads/" + req.file.filename : ""
+        let imageUrl = "";
+
+if (req.file) {
+  const result = await cloudinary.uploader.upload(
+    req.file.path,
+    {
+      folder: "gracelight-formulas"
+    }
+  );
+
+  imageUrl = result.secure_url;
+
+  fs.unlinkSync(req.file.path);
+}
+
+const formula = new Formula({
+  subject: req.body.subject,
+  title: req.body.title,
+  content: req.body.content,
+  image: imageUrl
 });
 
-        await formula.save();
+await formula.save();
 
         res.json({
             success: true
