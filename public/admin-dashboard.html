@@ -317,7 +317,7 @@ const response = await fetch(url, {
         alert("Question Saved Successfully");
 
         document.getElementById("topic").value = "";
-        questionEditor.setData('');
+        questionEditor.setContent('');
         document.getElementById("optionA").value = "";
         document.getElementById("optionB").value = "";
         document.getElementById("optionC").value = "";
@@ -403,7 +403,7 @@ async function editQuestion(id){
 
     document.getElementById("subject").value = q.subject;
     document.getElementById("topic").value = q.topic;
-    document.getElementById("question").value = q.question;
+    questionEditor.setContent(q.question);
     document.getElementById("optionA").value = q.optionA;
     document.getElementById("optionB").value = q.optionB;
     document.getElementById("optionC").value = q.optionC;
