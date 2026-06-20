@@ -69,7 +69,7 @@ button:hover{
 }
 
 </style>
-<script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
+<script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/7/tinymce.min.js" referrerpolicy="origin"></script>
 </head>
 
 <body>
@@ -227,19 +227,37 @@ let currentPin = "";
     
 let questionEditor;
 
-ClassicEditor
-.create(document.querySelector('#question'))
-.then(editor => {
-    questionEditor = editor;
-})
-.catch(error => {
-    console.error(error);
+tinymce.init({
+    selector: '#question',
+
+    plugins: [
+        'lists',
+        'link',
+        'table',
+        'charmap',
+        'code'
+    ],
+
+    toolbar:
+        'undo redo | ' +
+        'bold italic underline | ' +
+        'superscript subscript | ' +
+        'charmap | ' +
+        'bullist numlist | ' +
+        'table | ' +
+        'code',
+
+    height: 300,
+
+    setup: function(editor) {
+        questionEditor = editor;
+    }
 });    
 async function saveQuestion(){
 
     const subject = document.getElementById("subject").value;
     const topic = document.getElementById("topic").value;
-    const question = questionEditor.getData();
+    const question = questionEditor.getContent();
     const optionA = document.getElementById("optionA").value;
     const optionB = document.getElementById("optionB").value;
     const optionC = document.getElementById("optionC").value;
