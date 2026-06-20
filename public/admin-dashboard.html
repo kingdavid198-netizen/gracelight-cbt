@@ -135,10 +135,13 @@ No PIN Generated
 <input type="file" id="questionImage" accept="image/*">
 
 <input type="hidden" id="imageUrl">
-<input type="text" id="optionA" placeholder="Option A">
-<input type="text" id="optionB" placeholder="Option B">
-<input type="text" id="optionC" placeholder="Option C">
-<input type="text" id="optionD" placeholder="Option D">
+<textarea id="optionA"></textarea>
+
+<textarea id="optionB"></textarea>
+
+<textarea id="optionC"></textarea>
+
+<textarea id="optionD"></textarea>
 
 <select id="answer">
 <option value="">Select Correct Answer</option>
@@ -226,6 +229,10 @@ let editIndex = -1;
 let currentPin = "";
     
 let questionEditor;
+let optionAEditor;
+let optionBEditor;
+let optionCEditor;
+let optionDEditor;
 
 tinymce.init({
     selector: '#question',
@@ -252,16 +259,52 @@ tinymce.init({
     setup: function(editor) {
         questionEditor = editor;
     }
+});   
+
+tinymce.init({
+    selector: '#optionA',
+    height: 150,
+    toolbar: 'bold italic underline superscript subscript charmap',
+    setup: function(editor){
+        optionAEditor = editor;
+    }
+});
+
+tinymce.init({
+    selector: '#optionB',
+    height: 150,
+    toolbar: 'bold italic underline superscript subscript charmap',
+    setup: function(editor){
+        optionBEditor = editor;
+    }
+});
+
+tinymce.init({
+    selector: '#optionC',
+    height: 150,
+    toolbar: 'bold italic underline superscript subscript charmap',
+    setup: function(editor){
+        optionCEditor = editor;
+    }
+});
+
+tinymce.init({
+    selector: '#optionD',
+    height: 150,
+    toolbar: 'bold italic underline superscript subscript charmap',
+    setup: function(editor){
+        optionDEditor = editor;
+    }
 });    
 async function saveQuestion(){
 
     const subject = document.getElementById("subject").value;
     const topic = document.getElementById("topic").value;
     const question = questionEditor.getContent();
-    const optionA = document.getElementById("optionA").value;
-    const optionB = document.getElementById("optionB").value;
-    const optionC = document.getElementById("optionC").value;
-    const optionD = document.getElementById("optionD").value;
+    const optionA = optionAEditor.getContent();
+    const optionB = optionBEditor.getContent();
+    const optionC = optionCEditor.getContent();
+    const optionD = optionDEditor.getContent();
     const answer = document.getElementById("answer").value;
     const imageUrl = document.getElementById("imageUrl").value;
     if(
@@ -318,10 +361,10 @@ const response = await fetch(url, {
 
         document.getElementById("topic").value = "";
         questionEditor.setContent('');
-        document.getElementById("optionA").value = "";
-        document.getElementById("optionB").value = "";
-        document.getElementById("optionC").value = "";
-        document.getElementById("optionD").value = "";
+        optionAEditor.setContent('');
+        optionBEditor.setContent('');
+        optionCEditor.setContent('');
+        optionDEditor.setContent('');
         document.getElementById("answer").value = "";
 
         loadQuestions();
@@ -404,10 +447,10 @@ async function editQuestion(id){
     document.getElementById("subject").value = q.subject;
     document.getElementById("topic").value = q.topic;
     questionEditor.setContent(q.question);
-    document.getElementById("optionA").value = q.optionA;
-    document.getElementById("optionB").value = q.optionB;
-    document.getElementById("optionC").value = q.optionC;
-    document.getElementById("optionD").value = q.optionD;
+    optionAEditor.setContent(q.optionA);
+    optionBEditor.setContent(q.optionB);
+    optionCEditor.setContent(q.optionC);
+    optionDEditor.setContent(q.optionD);
     document.getElementById("answer").value = q.answer;
 
     editIndex = id;
