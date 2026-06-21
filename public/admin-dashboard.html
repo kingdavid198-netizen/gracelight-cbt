@@ -75,7 +75,14 @@ button:hover{
 .question-card br {
     line-height: 1.2;
 }   
+.question-box p{
+    margin:0;
+    padding:0;
+}
 
+.question-box div{
+    margin:2px 0;
+}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/tinymce@7/tinymce.min.js"></script>
 </head>
@@ -410,14 +417,17 @@ async function loadQuestions(){
 
         <b>Topic:</b> ${q.topic}<br><br>
 
-        <b>Question:</b> ${q.question}<br><br>
+        <b>Question:</b>
+        <div>${q.question}</div>
+        <br>
 
         ${q.image ? `<img src="${q.image}" style="max-width:300px;display:block;margin-bottom:15px;">` : ""}
 
-        A. ${q.optionA}<br>
-        B. ${q.optionB}<br>
-        C. ${q.optionC}<br>
-        D. ${q.optionD}<br><br>
+        <div>A. ${q.optionA}</div>
+        <div>B. ${q.optionB}</div>
+        <div>C. ${q.optionC}</div>
+        <div>D. ${q.optionD}</div>
+        <br>
 
         <b>Correct Answer:</b> ${q.answer}<br><br>
 
