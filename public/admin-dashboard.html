@@ -83,6 +83,42 @@ button:hover{
 .question-box div{
     margin:2px 0;
 }
+
+.option-row,
+.answer-row{
+    display:flex;
+    align-items:flex-start;
+    gap:12px;
+    margin-bottom:15px;
+}
+
+.option-label{
+    width:70px;
+    flex-shrink:0;
+    font-weight:bold;
+    padding-top:8px;
+}
+
+.option-field{
+    flex:1;
+    min-width:0;
+}
+
+.option-row .option-field textarea,
+.option-row .option-field .tox-tinymce,
+.answer-row .option-field select{
+    width:100%;
+    margin:0;
+}
+
+.option-row .option-field textarea,
+.option-row .option-field .tox-tinymce{
+    min-height:120px;
+}
+
+.answer-row .option-field select{
+    min-height:46px;
+}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/tinymce@7/tinymce.min.js"></script>
 </head>
@@ -150,21 +186,46 @@ No PIN Generated
 <input type="file" id="questionImage" accept="image/*">
 
 <input type="hidden" id="imageUrl">
-<textarea id="optionA"></textarea>
+<div class="option-row">
+    <label class="option-label" for="optionA"><strong>A</strong></label>
+    <div class="option-field">
+        <textarea id="optionA"></textarea>
+    </div>
+</div>
 
-<textarea id="optionB"></textarea>
+<div class="option-row">
+    <label class="option-label" for="optionB"><strong>B</strong></label>
+    <div class="option-field">
+        <textarea id="optionB"></textarea>
+    </div>
+</div>
 
-<textarea id="optionC"></textarea>
+<div class="option-row">
+    <label class="option-label" for="optionC"><strong>C</strong></label>
+    <div class="option-field">
+        <textarea id="optionC"></textarea>
+    </div>
+</div>
 
-<textarea id="optionD"></textarea>
+<div class="option-row">
+    <label class="option-label" for="optionD"><strong>D</strong></label>
+    <div class="option-field">
+        <textarea id="optionD"></textarea>
+    </div>
+</div>
 
-<select id="answer">
-<option value="">Select Correct Answer</option>
-<option value="A">A</option>
-<option value="B">B</option>
-<option value="C">C</option>
-<option value="D">D</option>
-</select>
+<div class="answer-row">
+    <label class="option-label" for="answer"><strong>Answer</strong></label>
+    <div class="option-field">
+        <select id="answer">
+            <option value="">Select Correct Answer</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+            <option value="D">D</option>
+        </select>
+    </div>
+</div>
 
 <button onclick="saveQuestion()">Save Question</button>
 
