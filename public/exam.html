@@ -847,13 +847,46 @@ if(timer){
 
     let score = 0;
 
+    // Reuses the same comparison as scoring above; only records detail for review display.
+    let answersReview = [];
+
     questions.forEach((q,index)=>{
 
-        if(answers[index] === q.answer){
+        const isCorrect = answers[index] === q.answer;
+
+        if(isCorrect){
 
             score++;
 
         }
+
+        answersReview.push({
+
+            questionNumber: index + 1,
+
+            question: q.question,
+
+            image: q.image || "",
+
+            options: {
+
+                A: q.optionA,
+
+                B: q.optionB,
+
+                C: q.optionC,
+
+                D: q.optionD
+
+            },
+
+            selected: answers[index] || "",
+
+            correctAnswer: q.answer,
+
+            isCorrect: isCorrect
+
+        });
 
     });
 
@@ -894,7 +927,9 @@ percentage: percentage,
 
 remark: remark,
 
-date: new Date().toLocaleString()
+date: new Date().toLocaleString(),
+
+answersReview: answersReview
 
 };
   

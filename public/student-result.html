@@ -71,6 +71,135 @@ th{
 .print-btn{
 display:none;
 }
+.no-print{
+display:none !important;
+}
+}
+
+.review-section{
+margin-top:30px;
+}
+
+.review-title{
+font-size:22px;
+color:#1e3c72;
+margin-bottom:15px;
+text-align:center;
+}
+
+.review-summary{
+display:grid;
+grid-template-columns:repeat(5,1fr);
+gap:10px;
+margin-bottom:20px;
+}
+
+@media (max-width:700px){
+.review-summary{
+grid-template-columns:repeat(2,1fr);
+}
+}
+
+.review-summary-card{
+background:#eef6ff;
+border-radius:10px;
+padding:12px;
+text-align:center;
+}
+
+.review-summary-card .label{
+font-size:13px;
+color:#555;
+}
+
+.review-summary-card .value{
+font-size:22px;
+font-weight:bold;
+color:#1e3c72;
+}
+
+.review-question{
+border:1px solid #e0e0e0;
+border-radius:10px;
+padding:15px;
+margin-bottom:15px;
+}
+
+.review-question-header{
+display:flex;
+justify-content:space-between;
+align-items:center;
+margin-bottom:10px;
+flex-wrap:wrap;
+gap:8px;
+}
+
+.review-question-header .qnum{
+font-weight:bold;
+font-size:16px;
+}
+
+.badge{
+padding:4px 12px;
+border-radius:20px;
+font-size:13px;
+font-weight:bold;
+color:white;
+}
+
+.badge.correct{
+background:#2b8a3e;
+}
+
+.badge.wrong{
+background:#c92a2a;
+}
+
+.review-question-text{
+margin-bottom:10px;
+font-size:16px;
+text-align:left;
+}
+
+.review-question img{
+max-width:100%;
+height:auto;
+border-radius:8px;
+margin-bottom:10px;
+}
+
+.review-options{
+display:flex;
+flex-direction:column;
+gap:6px;
+text-align:left;
+}
+
+.review-option{
+padding:8px 12px;
+border-radius:6px;
+border:1px solid #ddd;
+font-size:15px;
+}
+
+.review-option.selected-wrong{
+background:#ffe3e3;
+border-color:#c92a2a;
+color:#c92a2a;
+font-weight:bold;
+}
+
+.review-option.correct-answer{
+background:#ebfbee;
+border-color:#2b8a3e;
+color:#2b8a3e;
+font-weight:bold;
+}
+
+.no-review-note{
+text-align:center;
+color:#888;
+margin-top:20px;
 }
 
 .school-header{
@@ -145,6 +274,8 @@ Loading result...
 Print Result
 </button>
 
+<div class="review-section no-print" id="answerReviewSection"></div>
+
 </div>
 
 <script>
@@ -189,6 +320,8 @@ async function loadStudentResult() {
                 ${student.remark || "N/A"}</p>
             `;
 
+            renderAnswerReview(student);
+
         } else {
 
             document.getElementById("studentInfo").innerHTML = `
@@ -208,6 +341,131 @@ async function loadStudentResult() {
             </h2>
         `;
     }
+}
+
+function escapeHtml(value){
+
+    return String(value == null ? "" : value)
+        .replace(/&/g,"&amp;")
+        .replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;");
+}
+
+function renderAnswerReview(student){
+
+    const section =
+    document.getElementById("answerReviewSection");
+
+    const review = student.answersReview;
+
+    if(!Array.isArray(review) || review.length === 0){
+
+        section.innerHTML = `
+            <p class="no-review-note">
+                Answer review not available for this result.
+            </p>
+        `;
+
+        return;
+    }
+
+    const total = review.length;
+    const attempted = review.filter(r => r.selected).length;
+    const correct = review.filter(r => r.isCorrect).length;
+    const wrong = total - correct;
+    const percentage =
+    student.percentage != null
+        ? student.percentage
+        : Math.round((correct / total) * 100);
+
+    const summaryHtml = `
+        <div class="review-summary">
+            <div class="review-summary-card">
+                <div class="label">Total Questions</div>
+                <div class="value">${total}</div>
+            </div>
+            <div class="review-summary-card">
+                <div class="label">Attempted</div>
+                <div class="value">${attempted}</div>
+            </div>
+            <div class="review-summary-card">
+                <div class="label">Correct</div>
+                <div class="value" style="color:#2b8a3e;">${correct}</div>
+            </div>
+            <div class="review-summary-card">
+                <div class="label">Wrong</div>
+                <div class="value" style="color:#c92a2a;">${wrong}</div>
+            </div>
+            <div class="review-summary-card">
+                <div class="label">Score</div>
+                <div class="value">${percentage}%</div>
+            </div>
+        </div>
+    `;
+
+    const optionLabels = ["A","B","C","D"];
+
+    const questionsHtml = review.map(r => {
+
+        const options = r.options || {};
+
+        const optionsHtml = optionLabels
+            .filter(letter => options[letter] !== undefined && options[letter] !== null && options[letter] !== "")
+            .map(letter => {
+
+                let cls = "review-option";
+
+                if(!r.isCorrect && letter === r.selected){
+                    cls += " selected-wrong";
+                }
+
+                if(letter === r.correctAnswer){
+                    cls += " correct-answer";
+                }
+
+                return `
+                    <div class="${cls}">
+                        ${letter}. ${escapeHtml(options[letter])}
+                    </div>
+                `;
+
+            }).join("");
+
+        return `
+            <div class="review-question">
+                <div class="review-question-header">
+                    <span class="qnum">Question ${r.questionNumber}</span>
+                    <span class="badge ${r.isCorrect ? "correct" : "wrong"}">
+                        ${r.isCorrect ? "Correct" : "Wrong"}
+                    </span>
+                </div>
+
+                <div class="review-question-text">
+                    ${escapeHtml(r.question)}
+                </div>
+
+                ${r.image ? `<img src="${r.image}" alt="Question Image">` : ""}
+
+                <div class="review-options">
+                    ${optionsHtml}
+                </div>
+
+                <p style="margin-top:8px;font-size:14px;color:#555;">
+                    Your answer: <strong>${r.selected || "Not answered"}</strong>
+                    &nbsp;|&nbsp;
+                    Correct answer: <strong>${r.correctAnswer}</strong>
+                </p>
+            </div>
+        `;
+
+    }).join("");
+
+    section.innerHTML = `
+        <div class="review-title">Review of Answers</div>
+        ${summaryHtml}
+        ${questionsHtml}
+    `;
+
 }
 
 loadStudentResult();
