@@ -110,6 +110,13 @@ line-height:1.6;
 }
 
 @media(max-width:768px){
+body{
+height:auto;
+min-height:100vh;
+overflow-x:visible;
+overflow-y:auto;
+}
+
   .btn{
     padding:13px;
     margin-bottom:10px;
@@ -120,10 +127,20 @@ flex-direction:column;
 height:auto;
 overflow:visible;
 padding-bottom:20px;
+width:100%;
 }
 
 .left{
-height:200px;
+height:auto;
+width:100%;
+flex:none;
+}
+
+.left img{
+width:100%;
+max-width:100%;
+height:auto;
+display:block;
 }
 
 h1{
