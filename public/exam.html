@@ -914,6 +914,7 @@ else{
 const resultData = {
 
 candidateName: candidateName,
+studentKey: (candidateName || "").trim().toLowerCase(),
 
 subject: selectedSubject,
 
@@ -985,9 +986,11 @@ localStorage.removeItem("examTime");
 localStorage.removeItem("examAnswers");
 localStorage.removeItem("exitCount");
 localStorage.removeItem("examAuthorized");
-sessionStorage.removeItem("pageReloaded");  
-time = 30 * 60; 
-    
+sessionStorage.removeItem("pageReloaded");
+
+const configuredDuration = Number(localStorage.getItem("examDurationMinutes") || 30);
+time = configuredDuration * 60;
+
 examFinished = true;
     
 setTimeout(() => {
@@ -996,9 +999,15 @@ setTimeout(() => {
 
 }
 
+const configuredDurationMinutes = Number(localStorage.getItem("examDurationMinutes") || 30);
+
+if (localStorage.getItem("examTime") && Number(localStorage.getItem("examTime")) !== configuredDurationMinutes * 60) {
+    localStorage.removeItem("examTime");
+}
+
 let time = localStorage.getItem("examTime")
     ? parseInt(localStorage.getItem("examTime"))
-    : 30 * 60;
+    : configuredDurationMinutes * 60;
 
 function startTimer(){
 
@@ -1115,6 +1124,10 @@ document.addEventListener("visibilitychange", function () {
 });  
 
 if (!examTerminated) {
+    const storedDuration = Number(localStorage.getItem("examDurationMinutes") || 30);
+    if (!localStorage.getItem("examTime")) {
+        time = storedDuration * 60;
+    }
     loadQuestions();
     startTimer();
 }

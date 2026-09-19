@@ -192,7 +192,7 @@ alert("Error loading topics");
 
 });
 
-function startExam(){
+async function startExam(){
 
 const name = document.getElementById("name").value;
 const subject = document.getElementById("subject").value;
@@ -201,6 +201,18 @@ const topic = document.getElementById("topic").value;
 if(name==="" || subject==="" || topic===""){
 alert("Please fill all fields");
 return;
+}
+
+localStorage.removeItem("examTime");
+
+try {
+    const response = await fetch(`/exam-config/${encodeURIComponent(subject)}/${encodeURIComponent(topic)}`);
+    const config = await response.json();
+    const durationMinutes = Number(config && config.durationMinutes ? config.durationMinutes : 30);
+    localStorage.setItem("examDurationMinutes", String(durationMinutes));
+} catch (error) {
+    console.log(error);
+    localStorage.setItem("examDurationMinutes", "30");
 }
 
 localStorage.setItem("candidateName", name);

@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require("express");
 const fs = require("fs");
 const multer = require("multer");
@@ -8,6 +9,7 @@ const Question = require("./Question");
 const Result = require("./Result");
 const Pin = require("./Pin");
 const Formula = require("./Formula");
+const ExamConfig = require("./ExamConfig");
 const cloudinary = require("./cloudinary");
 
 const app = express();
@@ -243,6 +245,166 @@ app.get("/questions", async (req, res) => {
 
     }
 
+});
+
+app.get("/exam-config", async (req, res) => {
+    try {
+        const configs = await ExamConfig.find().sort({ subject: 1, topic: 1 });
+        res.json(configs);
+    } catch (error) {
+        console.log(error);
+        res.json([]);
+    }
+});
+
+app.get("/exam-config/:subject", async (req, res) => {
+    try {
+        const subject = req.params.subject || "";
+        const config = await ExamConfig.findOne({ subject, topic: "" }).sort({ createdAt: -1 });
+
+        if (!config) {
+            return res.json({
+                durationMinutes: 30,
+                subject,
+                topic: ""
+            });
+        }
+
+        res.json(config);
+    } catch (error) {
+        console.log(error);
+        res.json({ durationMinutes: 30 });
+    }
+});
+
+app.get("/exam-config/:subject/:topic", async (req, res) => {
+    try {
+        const subject = req.params.subject || "";
+        const topic = req.params.topic || "";
+
+        let config = await ExamConfig.findOne({ subject, topic }).sort({ createdAt: -1 });
+
+        if (!config) {
+            config = await ExamConfig.findOne({ subject, topic: "" }).sort({ createdAt: -1 });
+        }
+
+        if (!config) {
+            return res.json({
+                durationMinutes: 30,
+                subject,
+                topic
+            });
+        }
+
+        res.json(config);
+    } catch (error) {
+        console.log(error);
+        res.json({ durationMinutes: 30 });
+    }
+});
+
+app.post("/exam-config", async (req, res) => {
+    try {
+        const { subject, topic = "", durationMinutes } = req.body || {};
+
+        if (!subject || !durationMinutes || Number(durationMinutes) < 1) {
+            return res.status(400).json({
+                success: false,
+                message: "Subject and a valid duration are required"
+            });
+        }
+
+        const normalizedDuration = Number(durationMinutes);
+
+        const config = await ExamConfig.findOneAndUpdate(
+            { subject, topic },
+            {
+                subject,
+                topic,
+                durationMinutes: normalizedDuration
+            },
+            {
+                upsert: true,
+                new: true,
+                setDefaultsOnInsert: true
+            }
+        );
+
+        res.json({
+            success: true,
+            config
+        });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
+app.put("/exam-config/:id", async (req, res) => {
+    try {
+        const { subject, topic = "", durationMinutes } = req.body || {};
+
+        if (!subject || !durationMinutes || Number(durationMinutes) < 1) {
+            return res.status(400).json({
+                success: false,
+                message: "Subject and a valid duration are required"
+            });
+        }
+
+        const config = await ExamConfig.findByIdAndUpdate(
+            req.params.id,
+            {
+                subject,
+                topic,
+                durationMinutes: Number(durationMinutes)
+            },
+            { new: true }
+        );
+
+        if (!config) {
+            return res.status(404).json({
+                success: false,
+                message: "Exam configuration not found"
+            });
+        }
+
+        res.json({
+            success: true,
+            config
+        });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
+app.delete("/exam-config/:id", async (req, res) => {
+    try {
+        const config = await ExamConfig.findByIdAndDelete(req.params.id);
+
+        if (!config) {
+            return res.status(404).json({
+                success: false,
+                message: "Exam configuration not found"
+            });
+        }
+
+        res.json({
+            success: true
+        });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
 });
 
 app.post("/add-question", async (req, res) => {
@@ -485,16 +647,41 @@ app.post("/use-pin", async (req, res) => {
 
 });
 
+function normalizeStudentKey(value) {
+    return String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+}
+
 app.post("/save-result", async (req, res) => {
 
     try {
 
-        const result = new Result(req.body);
+        const studentKey = normalizeStudentKey(
+            req.body.studentKey || req.body.candidateName
+        );
+
+        if (!studentKey) {
+            return res.status(400).json({
+                success: false,
+                message: "Student key is required"
+            });
+        }
+
+        const resultData = {
+            ...req.body,
+            studentKey,
+            date: req.body.date || new Date().toLocaleString()
+        };
+
+        const result = new Result(resultData);
 
         await result.save();
 
         res.json({
-            success: true
+            success: true,
+            resultId: result._id
         });
 
     } catch (error) {
@@ -509,13 +696,32 @@ app.post("/save-result", async (req, res) => {
 
 });
 
+app.get("/results/:studentKey", async (req, res) => {
 
+    try {
+
+        const studentKey = normalizeStudentKey(req.params.studentKey);
+
+        const results = await Result.find({ studentKey })
+            .sort({ createdAt: -1, _id: -1 });
+
+        res.json(results);
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.json([]);
+
+    }
+
+});
 
 app.get("/results", async (req, res) => {
 
     try {
 
-        const results = await Result.find().sort({_id:-1});
+        const results = await Result.find().sort({ createdAt: -1, _id: -1 });
 
         res.json(results);
 

@@ -233,6 +233,31 @@ No PIN Generated
 Total Questions: 0
 </div>
 
+<h2>Exam Time Settings</h2>
+
+<select id="configSubject">
+<option value="">Select Subject</option>
+<option>Account</option>
+<option>Biology</option>
+<option>Chemistry</option>
+<option>Commerce</option>
+<option>CRS</option>
+<option>Economics</option>
+<option>English</option>
+<option>Government</option>
+<option>Literature</option>
+<option>Mathematics</option>
+<option>Physics</option>
+</select>
+
+<input type="text" id="configTopic" placeholder="Optional Topic (leave blank for subject-wide default)">
+<input type="number" id="durationMinutes" min="1" step="1" placeholder="Exam Duration in Minutes">
+
+<button id="saveExamConfigBtn" onclick="saveExamConfig()">Save Exam Duration</button>
+<div id="examConfigStatus" style="margin:10px 0; color:#0f766e; font-weight:bold;"></div>
+
+<div id="examConfigList" style="margin-top:15px;"></div>
+
   <hr>
 
 <h2>Bulk Upload Questions</h2>
@@ -303,6 +328,8 @@ Total Questions: 0
 
 let editIndex = -1;
 let currentPin = "";
+let editingExamConfigId = null;
+let examConfigs = [];
     
 let questionEditor;
 let optionAEditor;
@@ -573,6 +600,157 @@ async function deleteQuestion(id){
 
 }
 
+async function saveExamConfig(){
+    const subject = document.getElementById("configSubject").value;
+    const topic = document.getElementById("configTopic").value.trim();
+    const durationMinutes = Number(document.getElementById("durationMinutes").value);
+
+    if (!subject) {
+        alert("Please select a subject for the exam duration.");
+        return;
+    }
+
+    if (!Number.isFinite(durationMinutes) || durationMinutes < 1) {
+        alert("Please enter a valid exam duration in minutes.");
+        return;
+    }
+
+    try {
+        const method = editingExamConfigId ? "PUT" : "POST";
+        const url = editingExamConfigId ? `/exam-config/${editingExamConfigId}` : "/exam-config";
+
+        const response = await fetch(url, {
+            method,
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                subject,
+                topic,
+                durationMinutes
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            const successMessage = editingExamConfigId
+                ? "Exam duration updated successfully."
+                : "Exam duration saved successfully.";
+
+            document.getElementById("examConfigStatus").innerText = successMessage;
+            document.getElementById("configSubject").value = "";
+            document.getElementById("configTopic").value = "";
+            document.getElementById("durationMinutes").value = "";
+            editingExamConfigId = null;
+            document.getElementById("saveExamConfigBtn").innerText = "Save Exam Duration";
+            loadExamConfig();
+        } else {
+            document.getElementById("examConfigStatus").innerText = data.message || "Unable to save exam duration.";
+            alert(data.message || "Unable to save exam duration.");
+        }
+    } catch (error) {
+        console.log(error);
+        document.getElementById("examConfigStatus").innerText = "Unable to save exam duration.";
+        alert("Unable to save exam duration.");
+    }
+}
+
+async function deleteExamConfig(id){
+    const config = examConfigs.find(item => item._id === id);
+    const name = config ? `${config.subject}${config.topic ? ` / ${config.topic}` : " (default)"}` : "this exam config";
+
+    if (!confirm(`Delete saved duration for ${name}?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/exam-config/${id}`, {
+            method: "DELETE"
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            if (editingExamConfigId === id) {
+                editingExamConfigId = null;
+                document.getElementById("saveExamConfigBtn").innerText = "Save Exam Duration";
+                document.getElementById("configSubject").value = "";
+                document.getElementById("configTopic").value = "";
+                document.getElementById("durationMinutes").value = "";
+            }
+            document.getElementById("examConfigStatus").innerText = "Exam duration deleted successfully.";
+            loadExamConfig();
+        } else {
+            alert(data.message || "Unable to delete exam duration.");
+        }
+    } catch (error) {
+        console.log(error);
+        alert("Unable to delete exam duration.");
+    }
+}
+
+function editExamConfig(id){
+    const config = examConfigs.find(item => item._id === id);
+
+    if (!config) {
+        alert("Exam duration not found.");
+        return;
+    }
+
+    editingExamConfigId = id;
+    document.getElementById("configSubject").value = config.subject || "";
+    document.getElementById("configTopic").value = config.topic || "";
+    document.getElementById("durationMinutes").value = config.durationMinutes || "";
+    document.getElementById("saveExamConfigBtn").innerText = "Update Exam Duration";
+    document.getElementById("examConfigStatus").innerText = "Editing saved exam duration.";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function loadExamConfig(){
+    try {
+        const response = await fetch("/exam-config");
+        const configs = await response.json();
+        examConfigs = Array.isArray(configs) ? configs : [];
+
+        const list = document.getElementById("examConfigList");
+
+        if (!examConfigs.length) {
+            list.innerHTML = "<p>No exam durations saved yet.</p>";
+            return;
+        }
+
+        list.innerHTML = `
+            <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Subject</th>
+                        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Topic</th>
+                        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Duration</th>
+                        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${examConfigs.map(config => `
+                        <tr>
+                            <td style="padding:8px; border-bottom:1px solid #eee;">${config.subject || "N/A"}</td>
+                            <td style="padding:8px; border-bottom:1px solid #eee;">${config.topic || "default"}</td>
+                            <td style="padding:8px; border-bottom:1px solid #eee;">${config.durationMinutes || 0} min</td>
+                            <td style="padding:8px; border-bottom:1px solid #eee;">
+                                <button type="button" onclick="editExamConfig('${config._id}')" style="width:auto; margin-right:8px; padding:8px 10px;">Edit</button>
+                                <button type="button" onclick="deleteExamConfig('${config._id}')" style="width:auto; padding:8px 10px; background:#dc2626;">Delete</button>
+                            </td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        `;
+    } catch (error) {
+        console.log(error);
+        document.getElementById("examConfigList").innerHTML = "Unable to load saved exam durations.";
+    }
+}
+
 function generatePin(){
 
 const pin =
@@ -688,6 +866,7 @@ async function bulkUpload() {
     
 loadQuestions();
 loadLatestPin();
+loadExamConfig();
 
 function logoutAdmin(){
     localStorage.removeItem("adminAuthorized");
