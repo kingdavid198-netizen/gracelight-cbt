@@ -273,6 +273,11 @@ Total Questions: 0
 
 <br><br>  
     
+<div>
+    <label><input type="checkbox" id="selectAllQuestions" onchange="toggleAllQuestions(this.checked)"> Select All</label>
+    <button type="button" onclick="deleteSelectedQuestions()">Delete Selected</button>
+</div>
+
 <div id="questionsContainer"></div>
 
 </div>
@@ -505,6 +510,8 @@ async function loadQuestions(){
 
         div.innerHTML = `
 
+        <label><input type="checkbox" class="question-checkbox" value="${q._id}"> Select</label><br><br>
+
         <b>Subject:</b> ${q.subject}<br><br>
 
         <b>Topic:</b> ${q.topic}<br><br>
@@ -598,6 +605,44 @@ async function deleteQuestion(id){
 
     }
 
+}
+
+function toggleAllQuestions(checked){
+    document.querySelectorAll(".question-checkbox").forEach(checkbox => {
+        checkbox.checked = checked;
+    });
+}
+
+async function deleteSelectedQuestions(){
+    const ids = Array.from(document.querySelectorAll(".question-checkbox:checked"))
+        .map(checkbox => checkbox.value);
+
+    if(ids.length === 0){
+        alert("Select at least one question to delete.");
+        return;
+    }
+
+    if(!confirm(`Delete ${ids.length} selected questions? This cannot be undone.`)){
+        return;
+    }
+
+    try{
+        const response = await fetch("/delete-questions", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids })
+        });
+        const data = await response.json();
+
+        if(!data.success){
+            throw new Error(data.message || "Bulk delete failed");
+        }
+
+        loadQuestions();
+    }catch(error){
+        console.log(error);
+        alert("Error deleting selected questions");
+    }
 }
 
 async function saveExamConfig(){

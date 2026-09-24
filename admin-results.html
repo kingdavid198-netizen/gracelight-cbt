@@ -53,6 +53,9 @@ background:darkred;
 
 <h1>GraceLight CBT Results</h1>
 
+<label><input type="checkbox" id="selectAllResults" onchange="toggleAllResults(this.checked)"> Select All</label>
+<button type="button" onclick="deleteSelectedResults()">Delete Selected</button>
+
 <table>
 
 <thead>
@@ -68,6 +71,7 @@ background:darkred;
 <th>Action</th>
 </tr>
 
+<th>Select</th>
 </thead>
 
 <tbody id="resultsBody">
@@ -94,6 +98,7 @@ body.innerHTML += `
 
 <tr>
 
+<td><input type="checkbox" class="result-checkbox" value="${result._id}"></td>
 <td>${result.candidate}</td>
 
 <td>${result.subject}</td>
@@ -133,7 +138,35 @@ method:"DELETE"
 loadResults();
 
 }
+}
 
+function toggleAllResults(checked){
+document.querySelectorAll(".result-checkbox").forEach(checkbox => checkbox.checked = checked);
+}
+
+async function deleteSelectedResults(){
+const ids = Array.from(document.querySelectorAll(".result-checkbox:checked"))
+.map(checkbox => checkbox.value);
+
+if(ids.length === 0){
+alert("Select at least one result to delete.");
+return;
+}
+
+if(!confirm(`Delete ${ids.length} selected results? This cannot be undone.`)) return;
+
+const response = await fetch("/delete-results", {
+method:"DELETE",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({ids})
+});
+
+const data = await response.json();
+if(data.success){
+loadResults();
+}else{
+alert("Error deleting selected results");
+}
 }
 
 loadResults();

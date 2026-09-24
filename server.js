@@ -478,6 +478,38 @@ app.delete("/delete-question/:id", async (req, res) => {
 
 });
 
+app.delete("/delete-questions", async (req, res) => {
+
+    try {
+
+        const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+
+        if (ids.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "No question IDs provided"
+            });
+        }
+
+        const result = await Question.deleteMany({ _id: { $in: ids } });
+
+        res.json({
+            success: true,
+            deletedCount: result.deletedCount
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.status(500).json({
+            success: false
+        });
+
+    }
+
+});
+
 app.get("/subject-topics/:subject", async (req, res) => {
 
     try {
@@ -752,6 +784,38 @@ app.delete("/delete-result/:id", async (req, res) => {
         console.log(error);
 
         res.json({
+            success: false
+        });
+
+    }
+
+});
+
+app.delete("/delete-results", async (req, res) => {
+
+    try {
+
+        const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+
+        if (ids.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "No result IDs provided"
+            });
+        }
+
+        const result = await Result.deleteMany({ _id: { $in: ids } });
+
+        res.json({
+            success: true,
+            deletedCount: result.deletedCount
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.status(500).json({
             success: false
         });
 
