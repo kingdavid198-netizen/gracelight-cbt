@@ -131,6 +131,43 @@ button:hover{
     border-radius:8px;
 }
 
+.content-tabs{
+    display:grid;
+    grid-template-columns:repeat(2, 1fr);
+    gap:10px;
+    margin:15px 0;
+}
+
+.content-tabs button{
+    margin:0;
+}
+
+.content-tabs button.active-tab{
+    background:#1028aa;
+}
+
+.content-tab{
+    display:none;
+}
+
+.content-tab.active-content-tab{
+    display:block;
+}
+
+.assignment-card,
+.submission-card{
+    border:1px solid #ddd;
+    padding:15px;
+    margin:12px 0;
+    border-radius:6px;
+}
+
+.assignment-card button,
+.submission-card button{
+    width:auto;
+    margin:5px 8px 5px 0;
+}
+
 @media (max-width:700px){
     .admin-nav{
         grid-template-columns:repeat(2, 1fr);
@@ -195,7 +232,7 @@ button:hover{
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/tinymce@7/tinymce.min.js"></script>
-<script src="https://cdn.ckeditor.com/4.22.1/standard/ckeditor.js"></script>
+<script src="https://cdn.ckeditor.com/4.25.2-lts/standard/ckeditor.js"></script>
 </head>
 
 <body>
@@ -219,7 +256,7 @@ if(localStorage.getItem("adminAuthorized") !== "true"){
     <button type="button" data-section="questionsSection" onclick="showAdminSection('questionsSection', this)">Questions</button>
     <button type="button" data-section="pinSection" onclick="showAdminSection('pinSection', this)">Pin Generation</button>
     <button type="button" data-section="resultsSection" onclick="showAdminSection('resultsSection', this)">Results</button>
-    <button type="button" data-section="formulaSection" onclick="showAdminSection('formulaSection', this)">Formula Manager</button>
+    <button type="button" data-section="formulaSection" onclick="showAdminSection('formulaSection', this)">Notes &amp; Assignments</button>
 </nav>
 
 <section id="pinSection" class="admin-section">
@@ -395,8 +432,16 @@ Total Questions: 0
 </section>
 
 <section id="formulaSection" class="admin-section">
-    <h2>Formula Manager</h2>
+    <h2>Notes &amp; Assignments</h2>
+    <div class="content-tabs" role="tablist" aria-label="Notes and assignments">
+        <button type="button" class="active-tab" onclick="showContentTab('notesTab', this)">Notes</button>
+        <button type="button" onclick="showContentTab('assignmentsTab', this)">Assignments</button>
+    </div>
+
+    <div id="notesTab" class="content-tab active-content-tab">
+    <h3>Post a Note</h3>
     <select id="formulaSubject">
+        <option value="Account">Account</option>
         <option value="Agricultural Science">Agricultural Science</option>
         <option value="Animal Husbandry">Animal Husbandry</option>
         <option value="Arabic">Arabic</option>
@@ -408,8 +453,10 @@ Total Questions: 0
         <option value="Civic Education">Civic Education</option>
         <option value="Commerce">Commerce</option>
         <option value="Computer Studies">Computer Studies</option>
+        <option value="CRS">CRS</option>
         <option value="Data Processing">Data Processing</option>
         <option value="Economics">Economics</option>
+        <option value="Use of English">Use of English</option>
         <option value="English Language">English Language</option>
         <option value="Financial Accounting">Financial Accounting</option>
         <option value="Food and Nutrition">Food and Nutrition</option>
@@ -421,6 +468,7 @@ Total Questions: 0
         <option value="Insurance">Insurance</option>
         <option value="Islamic Religious Studies">Islamic Religious Studies</option>
         <option value="Literature in English">Literature in English</option>
+        <option value="Literature">Literature</option>
         <option value="Marketing">Marketing</option>
         <option value="Mathematics">Mathematics</option>
         <option value="Music">Music</option>
@@ -431,17 +479,39 @@ Total Questions: 0
         <option value="Yoruba">Yoruba</option>
     </select>
 
-    <input type="text" id="formulaTitle" placeholder="Formula Title">
+    <input type="text" id="formulaTopic" placeholder="Topic (optional)">
+    <input type="text" id="formulaTitle" placeholder="Note Title">
     <input type="file" id="formulaImage" accept="image/*">
-    <textarea id="formulaContent" placeholder="Enter Formula" rows="5"></textarea>
-    <button id="saveFormulaBtn" type="button">Save Formula</button>
+    <textarea id="formulaContent" placeholder="Enter note content" rows="5"></textarea>
+    <button id="saveFormulaBtn" type="button">Save Note</button>
 
     <hr>
-    <h3>Bulk Upload Formulas</h3>
+    <h3>Bulk Upload Notes</h3>
     <input type="file" id="formulaExcelFile" accept=".xlsx,.xls,.csv">
-    <button type="button" onclick="bulkFormulaUpload()">Upload Formula Excel</button>
+    <button type="button" onclick="bulkFormulaUpload()">Upload Notes Spreadsheet</button>
     <hr>
     <div id="formulaList"></div>
+    </div>
+
+    <div id="assignmentsTab" class="content-tab">
+        <h3>Create an Assignment</h3>
+        <select id="assignmentSubject"></select>
+        <input type="text" id="assignmentTopic" placeholder="Topic">
+        <input type="text" id="assignmentTitle" placeholder="Assignment Title">
+        <label for="assignmentDueDate">Due date (optional)</label>
+        <input type="date" id="assignmentDueDate">
+        <textarea id="assignmentInstructions" placeholder="Assignment instructions" rows="6"></textarea>
+        <button id="saveAssignmentBtn" type="button">Save Assignment</button>
+        <hr>
+        <h3>Bulk Upload Assignments</h3>
+        <p>Spreadsheet columns: Subject, Topic, Title, Instructions (or Content), and optional Due Date.</p>
+        <input type="file" id="assignmentExcelFile" accept=".xlsx,.xls,.csv">
+        <button type="button" onclick="bulkAssignmentUpload()">Upload Assignments Spreadsheet</button>
+        <hr>
+        <h3>Assignments</h3>
+        <div id="assignmentList"></div>
+        <div id="submissionPanel"></div>
+    </div>
 </section>
 
 </div>
@@ -824,7 +894,18 @@ function showAdminSection(sectionId, button){
 
     if(sectionId === "formulaSection"){
         loadFormulas();
+        loadAssignments();
     }
+}
+
+function showContentTab(tabId, button){
+    document.querySelectorAll(".content-tab").forEach(tab => {
+        tab.classList.toggle("active-content-tab", tab.id === tabId);
+    });
+    document.querySelectorAll(".content-tabs button").forEach(tabButton => {
+        tabButton.classList.toggle("active-tab", tabButton === button);
+    });
+    if(tabId === "assignmentsTab") loadAssignments();
 }
 
 async function loadResults(){
@@ -921,21 +1002,29 @@ async function deleteSelectedResults(){
     }
 }
 
-CKEDITOR.replace("formulaContent");
+document.getElementById("assignmentSubject").innerHTML =
+    document.getElementById("formulaSubject").innerHTML;
 
-document.getElementById("saveFormulaBtn").onclick = async function(){
+function getEditorContent(instanceName, textareaId){
+    const editor = window.CKEDITOR && window.CKEDITOR.instances[instanceName];
+    return editor ? editor.getData() : document.getElementById(textareaId).value;
+}
+
+async function saveNote(){
     const subject = document.getElementById("formulaSubject").value;
+    const topic = document.getElementById("formulaTopic").value.trim();
     const title = document.getElementById("formulaTitle").value.trim();
-    const content = CKEDITOR.instances.formulaContent.getData();
+    const content = getEditorContent("formulaContent", "formulaContent");
     const imageFile = document.getElementById("formulaImage").files[0];
 
     if(!title || content.trim() === ""){
-        alert("Please enter formula title and content");
+        alert("Please enter a note title and content");
         return;
     }
 
     const formData = new FormData();
     formData.append("subject", subject);
+    formData.append("topic", topic);
     formData.append("title", title);
     formData.append("content", content);
     if(imageFile){
@@ -947,10 +1036,15 @@ document.getElementById("saveFormulaBtn").onclick = async function(){
         const result = await response.json();
 
         if(result.success){
-            alert("Formula Saved Successfully");
+            alert("Note saved successfully");
+            document.getElementById("formulaTopic").value = "";
             document.getElementById("formulaTitle").value = "";
             document.getElementById("formulaImage").value = "";
-            CKEDITOR.instances.formulaContent.setData("");
+            if(window.CKEDITOR && window.CKEDITOR.instances.formulaContent){
+                window.CKEDITOR.instances.formulaContent.setData("");
+            }else{
+                document.getElementById("formulaContent").value = "";
+            }
             loadFormulas();
         }else{
             alert(result.message || "Error Saving Formula");
@@ -959,7 +1053,9 @@ document.getElementById("saveFormulaBtn").onclick = async function(){
         console.log(error);
         alert("Error Saving Formula");
     }
-};
+}
+
+document.getElementById("saveFormulaBtn").addEventListener("click", saveNote);
 
 async function loadFormulas(){
     const formulaList = document.getElementById("formulaList");
@@ -973,6 +1069,7 @@ async function loadFormulas(){
             formulaList.innerHTML += `
                 <div class="formula-card">
                     <b>${formula.subject}</b>
+                    <div>${formula.topic || "General"}</div>
                     <h3>${formula.title}</h3>
                     <p>${formula.content}</p>
                     ${formula.image ? `<img src="${formula.image}" style="max-width:300px;display:block;margin-top:10px;margin-bottom:10px;">` : ""}
@@ -983,6 +1080,132 @@ async function loadFormulas(){
     }catch(error){
         console.log(error);
         formulaList.innerHTML = "Unable to load formulas.";
+    }
+}
+
+function escapeHTML(value){
+    return String(value || "").replace(/[&<>"']/g, character => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    })[character]);
+}
+
+async function saveAssignment(){
+    const assignment = {
+        subject: document.getElementById("assignmentSubject").value,
+        topic: document.getElementById("assignmentTopic").value.trim(),
+        title: document.getElementById("assignmentTitle").value.trim(),
+        dueDate: document.getElementById("assignmentDueDate").value,
+        instructions: getEditorContent("assignmentInstructions", "assignmentInstructions")
+    };
+
+    if(!assignment.subject || !assignment.topic || !assignment.title || !assignment.instructions.trim()){
+        alert("Please enter the subject, topic, title, and instructions");
+        return;
+    }
+
+    try{
+        const response = await fetch("/assignments", {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify(assignment)
+        });
+        const result = await response.json();
+        if(!result.success) throw new Error("Unable to save assignment");
+
+        document.getElementById("assignmentTopic").value = "";
+        document.getElementById("assignmentTitle").value = "";
+        document.getElementById("assignmentDueDate").value = "";
+        if(window.CKEDITOR && window.CKEDITOR.instances.assignmentInstructions){
+            window.CKEDITOR.instances.assignmentInstructions.setData("");
+        }else{
+            document.getElementById("assignmentInstructions").value = "";
+        }
+        loadAssignments();
+        alert("Assignment published. Student submissions will appear after students submit their answers.");
+    }catch(error){
+        console.log(error);
+        alert("Error saving assignment");
+    }
+}
+
+document.getElementById("saveAssignmentBtn").addEventListener("click", saveAssignment);
+
+if(window.CKEDITOR){
+    try{
+        window.CKEDITOR.replace("formulaContent");
+        window.CKEDITOR.replace("assignmentInstructions");
+    }catch(error){
+        console.log("CKEditor initialization failed; plain text editors remain available", error);
+    }
+}
+
+async function loadAssignments(){
+    const assignmentList = document.getElementById("assignmentList");
+    assignmentList.innerHTML = "";
+    try{
+        const response = await fetch("/assignments");
+        const assignments = await response.json();
+        if(!assignments.length){
+            assignmentList.textContent = "No assignments yet.";
+            return;
+        }
+        assignmentList.innerHTML = assignments.map(assignment => `
+            <div class="assignment-card">
+                <b>${escapeHTML(assignment.subject)} / ${escapeHTML(assignment.topic)}</b>
+                <h4>${escapeHTML(assignment.title)}</h4>
+                <div>${assignment.dueDate ? `Due ${escapeHTML(new Date(assignment.dueDate).toLocaleDateString())}` : "No due date"}</div>
+                <button type="button" onclick="loadAssignmentSubmissions('${assignment._id}')">View Submissions</button>
+                <button type="button" class="danger-button" onclick="deleteAssignment('${assignment._id}')">Delete</button>
+            </div>
+        `).join("");
+    }catch(error){
+        console.log(error);
+        assignmentList.textContent = "Unable to load assignments.";
+    }
+}
+
+async function loadAssignmentSubmissions(assignmentId){
+    const panel = document.getElementById("submissionPanel");
+    panel.innerHTML = "<h3>Submissions</h3>";
+    try{
+        const response = await fetch(`/assignments/${assignmentId}/submissions`);
+        const submissions = await response.json();
+        if(!submissions.length){
+            panel.innerHTML += "<p>No student answers have been submitted yet. Saving an assignment publishes it; students must submit their answers from the student Notes &amp; Assignments page.</p>";
+            return;
+        }
+        panel.innerHTML += submissions.map(submission => `
+            <article class="submission-card">
+                <b>${escapeHTML(submission.studentName || submission.studentKey)}</b>
+                <small>${escapeHTML(new Date(submission.submittedAt).toLocaleString())}</small>
+                <div style="white-space:pre-wrap;margin-top:10px">${escapeHTML(submission.answer)}</div>
+                ${submission.fileUrl ? `
+                    <div style="margin-top:12px">
+                        <a href="${escapeHTML(submission.fileUrl)}" target="_blank" rel="noopener">${escapeHTML(submission.fileName || "View uploaded file")}</a>
+                        ${submission.fileType && submission.fileType.startsWith("image/") ? `<img src="${escapeHTML(submission.fileUrl)}" alt="${escapeHTML(submission.fileName || "Student assignment image")}" style="display:block;max-width:100%;max-height:500px;margin-top:8px">` : ""}
+                    </div>
+                ` : ""}
+            </article>
+        `).join("");
+    }catch(error){
+        console.log(error);
+        panel.textContent = "Unable to load submissions.";
+    }
+}
+
+async function deleteAssignment(assignmentId){
+    if(!confirm("Delete this assignment and all its submissions?")) return;
+    try{
+        await fetch(`/assignments/${assignmentId}`, { method:"DELETE" });
+        document.getElementById("submissionPanel").innerHTML = "";
+        loadAssignments();
+    }catch(error){
+        console.log(error);
+        alert("Error deleting assignment");
     }
 }
 
@@ -1002,7 +1225,7 @@ async function bulkFormulaUpload(){
         const result = await response.json();
 
         if(result.success){
-            alert(`${result.count} formulas uploaded successfully`);
+            alert(`${result.count} notes uploaded successfully`);
             loadFormulas();
         }else{
             alert(result.message || "Upload failed");
@@ -1010,6 +1233,31 @@ async function bulkFormulaUpload(){
     }catch(error){
         console.log(error);
         alert("Error uploading formulas");
+    }
+}
+
+async function bulkAssignmentUpload(){
+    const file = document.getElementById("assignmentExcelFile").files[0];
+    if(!file){
+        alert("Please choose an assignments spreadsheet");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+    try{
+        const response = await fetch("/bulk-assignments", { method:"POST", body:formData });
+        const result = await response.json();
+        if(!response.ok || !result.success){
+            throw new Error(result.message || "Assignment upload failed");
+        }
+
+        alert(`${result.count} assignments uploaded${result.skipped ? `; ${result.skipped} incomplete rows skipped` : ""}`);
+        document.getElementById("assignmentExcelFile").value = "";
+        loadAssignments();
+    }catch(error){
+        console.log(error);
+        alert(error.message || "Error uploading assignments");
     }
 }
 

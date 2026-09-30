@@ -1,15 +1,15 @@
 const mongoose = require("mongoose");
 
-const FormulaSchema = new mongoose.Schema({
+const AssignmentSchema = new mongoose.Schema({
     subject: String,
     topic: String,
     title: String,
-    content: String,
-    image: String,
+    instructions: String,
+    dueDate: Date,
     createdAt: {
         type: Date,
         default: Date.now
     }
 });
 
-module.exports = mongoose.model("Formula", FormulaSchema);
+module.exports = mongoose.model("Assignment", AssignmentSchema);

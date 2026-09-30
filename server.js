@@ -9,10 +9,24 @@ const Question = require("./Question");
 const Result = require("./Result");
 const Pin = require("./Pin");
 const Formula = require("./Formula");
+const Assignment = require("./Assignment");
+const Submission = require("./Submission");
 const ExamConfig = require("./ExamConfig");
 const cloudinary = require("./cloudinary");
 
 const app = express();
+
+const resourceSubjectAliases = [
+    ["Account", "Financial Accounting"],
+    ["CRS", "Christian Religious Studies"],
+    ["English", "English Language"],
+    ["Literature", "Literature in English"]
+];
+
+function resourceSubjectFilter(subject) {
+    const aliases = resourceSubjectAliases.find(group => group.includes(subject));
+    return { $in: aliases || [subject] };
+}
 
 if (!fs.existsSync("uploads")) {
     fs.mkdirSync("uploads", { recursive: true });
@@ -52,6 +66,17 @@ const storage = multer.diskStorage({
 const upload = multer({
   
     storage: storage
+});
+
+const submissionUpload = multer({
+    storage,
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter(req, file, callback){
+        if (file.mimetype.startsWith("image/") || file.mimetype === "application/pdf") {
+            return callback(null, true);
+        }
+        callback(new Error("Only image and PDF files are allowed"));
+    }
 });
 
 const excelUpload = multer({
@@ -113,6 +138,7 @@ if (req.file) {
 
 const formula = new Formula({
   subject: req.body.subject,
+    topic: req.body.topic || "",
   title: req.body.title,
   content: req.body.content,
   image: imageUrl
@@ -140,7 +166,11 @@ app.get("/formulas", async (req, res) => {
 
     try {
 
-        const formulas = await Formula.find()
+        const filters = {};
+        if (req.query.subject) filters.subject = resourceSubjectFilter(req.query.subject);
+        if (req.query.topic) filters.topic = req.query.topic;
+
+        const formulas = await Formula.find(filters)
             .sort({ subject: 1 });
 
         res.json(formulas);
@@ -200,6 +230,7 @@ app.post("/bulk-formulas", upload.single("file"), async (req, res) => {
             await Formula.create({
                 
 subject: row.Subject || row.subject || "", 
+topic: row.Topic || row.topic || "",
 title: row.Title || row.title || "",
 content: row.Content || row.content || "",
 image: row.Image || row.image || ""
@@ -227,6 +258,169 @@ image: row.Image || row.image || ""
 
     }
 
+});
+
+app.get("/assignments", async (req, res) => {
+    try {
+        const filters = {};
+        if (req.query.subject) filters.subject = resourceSubjectFilter(req.query.subject);
+        if (req.query.topic) filters.topic = req.query.topic;
+
+        const assignments = await Assignment.find(filters).sort({ dueDate: 1, createdAt: -1 });
+        res.json(assignments);
+    } catch (error) {
+        console.log(error);
+        res.json([]);
+    }
+});
+
+app.post("/bulk-assignments", upload.single("file"), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ success: false, message: "Spreadsheet file is required" });
+    }
+
+    let count = 0;
+    let skipped = 0;
+    try {
+        const workbook = XLSX.readFile(req.file.path);
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+        for (const row of rows) {
+            const subject = row.Subject || row.subject || "";
+            const topic = row.Topic || row.topic || "";
+            const title = row.Title || row.title || "";
+            const instructions = row.Instructions || row.instructions || row.Content || row.content || "";
+            const rawDueDate = row["Due Date"] || row.DueDate || row.dueDate || "";
+
+            if (!subject || !topic || !title || !instructions) {
+                skipped++;
+                continue;
+            }
+
+            let dueDate = null;
+            if (rawDueDate) {
+                if (typeof rawDueDate === "number") {
+                    const dateParts = XLSX.SSF.parse_date_code(rawDueDate);
+                    if (dateParts) {
+                        dueDate = new Date(Date.UTC(
+                            dateParts.y,
+                            dateParts.m - 1,
+                            dateParts.d,
+                            dateParts.H,
+                            dateParts.M,
+                            dateParts.S
+                        ));
+                    }
+                } else {
+                    const parsedDate = new Date(rawDueDate);
+                    if (!Number.isNaN(parsedDate.getTime())) dueDate = parsedDate;
+                }
+            }
+
+            await Assignment.create({ subject, topic, title, instructions, dueDate });
+            count++;
+        }
+
+        res.json({ success: true, count, skipped });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ success: false, message: "Unable to upload assignments" });
+    } finally {
+        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    }
+});
+
+app.post("/assignments", async (req, res) => {
+    try {
+        const assignment = await Assignment.create({
+            subject: req.body.subject,
+            topic: req.body.topic || "",
+            title: req.body.title,
+            instructions: req.body.instructions,
+            dueDate: req.body.dueDate || null
+        });
+        res.json({ success: true, assignmentId: assignment._id });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ success: false });
+    }
+});
+
+app.delete("/assignments/:id", async (req, res) => {
+    try {
+        await Assignment.findByIdAndDelete(req.params.id);
+        await Submission.deleteMany({ assignment: req.params.id });
+        res.json({ success: true });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ success: false });
+    }
+});
+
+app.get("/assignments/:id/submissions", async (req, res) => {
+    try {
+        const filters = { assignment: req.params.id };
+        if (req.query.studentKey) {
+            filters.studentKey = normalizeStudentKey(req.query.studentKey);
+        }
+        const submissions = await Submission.find(filters)
+            .sort({ submittedAt: -1 });
+        res.json(submissions);
+    } catch (error) {
+        console.log(error);
+        res.json([]);
+    }
+});
+
+app.post("/assignments/:id/submissions", (req, res, next) => {
+    submissionUpload.single("file")(req, res, error => {
+        if (error) {
+            return res.status(400).json({ success: false, message: error.message });
+        }
+        next();
+    });
+}, async (req, res) => {
+    const tempFilePath = req.file && req.file.path;
+    try {
+        const studentKey = normalizeStudentKey(req.body.studentKey || req.body.studentName);
+        const answer = String(req.body.answer || "").trim();
+        if (!studentKey || (!answer && !req.file)) {
+            return res.status(400).json({ success: false, message: "Student name and an answer or file are required" });
+        }
+
+        let uploadedFile = null;
+        if (req.file) {
+            const result = await cloudinary.uploader.upload(req.file.path, {
+                folder: "gracelight-assignment-submissions",
+                resource_type: "auto"
+            });
+            uploadedFile = {
+                fileUrl: result.secure_url,
+                fileName: req.file.originalname,
+                fileType: req.file.mimetype
+            };
+        }
+
+        const fieldsToSet = {
+            studentName: req.body.studentName || studentKey,
+            answer,
+            submittedAt: new Date()
+        };
+        if (uploadedFile) Object.assign(fieldsToSet, uploadedFile);
+
+        const submission = await Submission.findOneAndUpdate(
+            { assignment: req.params.id, studentKey },
+            { $set: fieldsToSet },
+            { new: true, upsert: true, runValidators: true }
+        );
+        res.json({ success: true, submissionId: submission._id });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ success: false });
+    } finally {
+        if (tempFilePath && fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+    }
 });
 
 app.get("/questions", async (req, res) => {

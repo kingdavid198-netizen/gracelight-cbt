@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notes &amp; Assignments - GraceLight CBT</title>
+<style>
+:root{
+    color-scheme:light;
+    --ink:#1c2730;
+    --muted:#5e6b73;
+    --line:#d7dfe2;
+    --paper:#fff;
+    --canvas:#edf2ef;
+    --green:#176b48;
+    --green-dark:#104d35;
+}
+*{box-sizing:border-box}
+body{
+    margin:0;
+    padding:24px;
+    background:var(--canvas);
+    color:var(--ink);
+    font-family:Arial,sans-serif;
+}
+main{max-width:1000px;margin:0 auto}
+header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:18px;
+    margin-bottom:24px;
+}
+h1{margin:0;font-size:30px}
+.home-link{color:var(--green-dark);font-weight:bold;text-decoration:none}
+.filters{
+    display:grid;
+    grid-template-columns:minmax(200px,1fr) minmax(200px,1fr) minmax(220px,1fr);
+    gap:16px;
+    padding:20px 0;
+    border-top:1px solid var(--line);
+    border-bottom:1px solid var(--line);
+}
+label{display:block;margin-bottom:7px;font-weight:bold}
+input,select,textarea{
+    width:100%;
+    padding:11px 12px;
+    border:1px solid #aebbc0;
+    border-radius:4px;
+    background:white;
+    color:var(--ink);
+    font:inherit;
+}
+.tabs{display:flex;gap:6px;margin:22px 0 0;border-bottom:1px solid var(--line)}
+.tabs button{
+    padding:11px 18px;
+    border:0;
+    border-bottom:3px solid transparent;
+    background:transparent;
+    color:var(--muted);
+    font:inherit;
+    font-weight:bold;
+    cursor:pointer;
+}
+.tabs button[aria-selected="true"]{border-bottom-color:var(--green);color:var(--green-dark)}
+#resourceList{min-height:150px}
+.resource-card{padding:22px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.resource-card h2{margin:7px 0 12px;font-size:22px}
+.resource-meta{color:var(--muted);font-size:14px}
+.resource-content{line-height:1.6;margin:12px 0;overflow-wrap:anywhere}
+.resource-card img{display:block;max-width:100%;height:auto;margin-top:12px}
+.assignment-form{max-width:700px;margin-top:20px}
+.assignment-form textarea{min-height:130px;resize:vertical}
+.assignment-form input[type="file"]{padding:9px}
+.field{margin-top:14px}
+.primary-button{
+    margin-top:16px;
+    padding:12px 18px;
+    border:0;
+    border-radius:4px;
+    background:var(--green);
+    color:white;
+    font:inherit;
+    font-weight:bold;
+    cursor:pointer;
+}
+.primary-button:hover{background:var(--green-dark)}
+.saved-file{margin-top:10px}
+.saved-file img{max-width:100%;max-height:360px}
+.status{padding:24px 0;color:var(--muted)}
+@media(max-width:700px){
+    body{padding:16px}
+    header{align-items:flex-start;flex-direction:column}
+    h1{font-size:26px}
+    .filters{grid-template-columns:1fr;gap:12px}
+    .tabs button{flex:1;padding:11px 8px}
+}
+</style>
+</head>
+<body>
+<main>
+    <header>
+        <h1>Notes &amp; Assignments</h1>
+        <a class="home-link" href="index.html">Back to home</a>
+    </header>
+
+    <section class="filters" aria-label="Browse resources">
+        <div>
+            <label for="subjectFilter">Subject</label>
+            <select id="subjectFilter"><option value="">All subjects</option></select>
+        </div>
+        <div>
+            <label for="topicFilter">Topic</label>
+            <select id="topicFilter"><option value="">All topics</option></select>
+        </div>
+        <div>
+            <label for="studentName">Student name</label>
+            <input id="studentName" type="text" autocomplete="name" placeholder="Enter your name to submit">
+        </div>
+    </section>
+
+    <div class="tabs" role="tablist" aria-label="Resource type">
+        <button type="button" role="tab" aria-selected="true" onclick="showResourceTab('notes', this)">Notes</button>
+        <button type="button" role="tab" aria-selected="false" onclick="showResourceTab('assignments', this)">Assignments</button>
+    </div>
+    <section id="resourceList" aria-live="polite" class="status">Loading resources...</section>
+</main>
+<script>
+const subjectFilter = document.getElementById("subjectFilter");
+const topicFilter = document.getElementById("topicFilter");
+const studentNameField = document.getElementById("studentName");
+const resourceList = document.getElementById("resourceList");
+const commonSubjects = [
+    "Account", "Agricultural Science", "Animal Husbandry", "Arabic", "Biology",
+    "Book Keeping", "Business Studies", "Chemistry", "Christian Religious Studies",
+    "Civic Education", "Commerce", "Computer Studies", "CRS", "Data Processing",
+    "Economics", "Use of English", "English Language", "Financial Accounting", "Food and Nutrition",
+    "Further Mathematics", "Geography", "Government", "History", "Home Economics",
+    "Insurance", "Islamic Religious Studies", "Literature", "Literature in English",
+    "Marketing", "Mathematics", "Music", "Physical and Health Education", "Physics",
+    "Technical Drawing", "Visual Arts", "Yoruba"
+];
+let notes = [];
+let assignments = [];
+let activeTab = "notes";
+
+function escapeHTML(value){
+    return String(value || "").replace(/[&<>"']/g, character => ({
+        "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+    })[character]);
+}
+
+function displaySubject(subject){
+    return subject === "English" ? "Use of English" : subject;
+}
+
+function selectedResources(resources){
+    const subject = subjectFilter.value;
+    const topic = topicFilter.value;
+    return resources.filter(resource =>
+        (!subject || displaySubject(resource.subject) === subject) &&
+        (!topic || (resource.topic || "General") === topic)
+    );
+}
+
+function populateSubjects(){
+    const selectedSubject = subjectFilter.value;
+    const subjects = new Set(commonSubjects);
+    [...notes, ...assignments].forEach(resource => {
+        if(resource.subject) subjects.add(displaySubject(resource.subject));
+    });
+    subjectFilter.innerHTML = '<option value="">All subjects</option>';
+    [...subjects].sort().forEach(subject => {
+        const option = document.createElement("option");
+        option.value = subject;
+        option.textContent = subject;
+        subjectFilter.appendChild(option);
+    });
+    subjectFilter.value = selectedSubject;
+}
+
+function updateTopics(){
+    const selectedTopic = topicFilter.value;
+    const subject = subjectFilter.value;
+    const resources = [...notes, ...assignments].filter(resource => !subject || displaySubject(resource.subject) === subject);
+    const topics = new Set(resources.map(resource => resource.topic || "General"));
+    topicFilter.innerHTML = '<option value="">All topics</option>';
+    [...topics].sort().forEach(topic => {
+        const option = document.createElement("option");
+        option.value = topic;
+        option.textContent = topic;
+        topicFilter.appendChild(option);
+    });
+    topicFilter.value = topics.has(selectedTopic) ? selectedTopic : "";
+}
+
+function showResourceTab(tab, button){
+    activeTab = tab;
+    document.querySelectorAll('[role="tab"]').forEach(tabButton => {
+        tabButton.setAttribute("aria-selected", String(tabButton === button));
+    });
+    renderResources();
+}
+
+function renderResources(){
+    const visibleResources = selectedResources(activeTab === "notes" ? notes : assignments);
+    if(!visibleResources.length){
+        resourceList.className = "status";
+        resourceList.textContent = activeTab === "notes" ? "No notes match these filters." : "No assignments match these filters.";
+        return;
+    }
+
+    resourceList.className = "";
+    if(activeTab === "notes"){
+        resourceList.innerHTML = visibleResources.map(note => `
+            <article class="resource-card">
+                <div class="resource-meta">${escapeHTML(displaySubject(note.subject))} / ${escapeHTML(note.topic || "General")}</div>
+                <h2>${escapeHTML(note.title)}</h2>
+                <div class="resource-content">${note.content || ""}</div>
+                ${note.image ? `<img src="${escapeHTML(note.image)}" alt="">` : ""}
+            </article>
+        `).join("");
+        return;
+    }
+
+    resourceList.innerHTML = visibleResources.map(assignment => `
+        <article class="resource-card">
+            <div class="resource-meta">${escapeHTML(displaySubject(assignment.subject))} / ${escapeHTML(assignment.topic || "General")}</div>
+            <h2>${escapeHTML(assignment.title)}</h2>
+            <div class="resource-meta">${assignment.dueDate ? `Due ${escapeHTML(new Date(assignment.dueDate).toLocaleDateString())}` : "No due date"}</div>
+            <div class="resource-content">${assignment.instructions || ""}</div>
+            <div class="assignment-form">
+                <div class="field">
+                    <label for="answer-${assignment._id}">Your answer</label>
+                    <textarea id="answer-${assignment._id}" placeholder="Write your answer"></textarea>
+                </div>
+                <div class="field">
+                    <label for="file-${assignment._id}">Upload a photo or PDF (optional)</label>
+                    <input id="file-${assignment._id}" type="file" accept="image/*,application/pdf">
+                </div>
+                <div id="saved-file-${assignment._id}" class="saved-file"></div>
+                <button class="primary-button" type="button" onclick="submitStudentAssignment('${assignment._id}')">Submit answer</button>
+            </div>
+        </article>
+    `).join("");
+    loadSavedStudentAnswers(visibleResources);
+}
+
+async function loadSavedStudentAnswers(visibleAssignments){
+    const name = studentNameField.value.trim();
+    if(!name) return;
+    await Promise.all(visibleAssignments.map(async assignment => {
+        try{
+            const response = await fetch(`/assignments/${assignment._id}/submissions?studentKey=${encodeURIComponent(name)}`);
+            const submissions = await response.json();
+            const submission = submissions[0];
+            if(!submission) return;
+            const answerField = document.getElementById(`answer-${assignment._id}`);
+            if(answerField) answerField.value = submission.answer || "";
+            const savedFile = document.getElementById(`saved-file-${assignment._id}`);
+            if(savedFile && submission.fileUrl){
+                savedFile.innerHTML = `<a href="${escapeHTML(submission.fileUrl)}" target="_blank" rel="noopener">Previously uploaded: ${escapeHTML(submission.fileName || "View file")}</a>${submission.fileType && submission.fileType.startsWith("image/") ? `<img src="${escapeHTML(submission.fileUrl)}" alt="${escapeHTML(submission.fileName || "Uploaded assignment image")}">` : ""}`;
+            }
+        }catch(error){
+            console.log(error);
+        }
+    }));
+}
+
+async function submitStudentAssignment(assignmentId){
+    const name = studentNameField.value.trim();
+    const answerField = document.getElementById(`answer-${assignmentId}`);
+    const fileField = document.getElementById(`file-${assignmentId}`);
+    const file = fileField.files[0];
+    const answer = answerField.value.trim();
+    if(!name){
+        alert("Enter your name before submitting");
+        studentNameField.focus();
+        return;
+    }
+    if(!answer && !file){
+        alert("Write an answer or choose an image/PDF file");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("studentName", name);
+    formData.append("studentKey", name);
+    formData.append("answer", answer);
+    if(file) formData.append("file", file);
+    try{
+        const response = await fetch(`/assignments/${assignmentId}/submissions`, {
+            method:"POST",
+            body:formData
+        });
+        const result = await response.json();
+        if(!response.ok || !result.success) throw new Error(result.message || "Submission failed");
+        localStorage.setItem("candidateName", name);
+        fileField.value = "";
+        await loadSavedStudentAnswers(assignments.filter(assignment => assignment._id === assignmentId));
+        alert("Answer submitted");
+    }catch(error){
+        console.log(error);
+        alert(error.message || "Unable to submit your answer");
+    }
+}
+
+subjectFilter.addEventListener("change", () => {
+    updateTopics();
+    renderResources();
+});
+topicFilter.addEventListener("change", renderResources);
+studentNameField.addEventListener("change", () => {
+    if(activeTab === "assignments") renderResources();
+});
+
+async function loadResources(){
+    try{
+        const [notesResponse, assignmentsResponse] = await Promise.all([
+            fetch("/formulas"),
+            fetch("/assignments")
+        ]);
+        if(!notesResponse.ok || !assignmentsResponse.ok) throw new Error("Unable to load resources");
+        notes = await notesResponse.json();
+        assignments = await assignmentsResponse.json();
+        populateSubjects();
+        updateTopics();
+        renderResources();
+    }catch(error){
+        console.log(error);
+        resourceList.className = "status";
+        resourceList.textContent = "Unable to load resources.";
+    }
+}
+
+studentNameField.value = localStorage.getItem("candidateName") || "";
+loadResources();
+</script>
+</body>
+</html>
