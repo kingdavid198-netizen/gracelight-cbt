@@ -185,6 +185,53 @@ app.get("/formulas", async (req, res) => {
 
 });
 
+app.put("/formulas/:id", upload.single("image"), async (req, res) => {
+
+    try {
+
+        const updates = {
+            subject: req.body.subject,
+            topic: req.body.topic || "",
+            title: req.body.title,
+            content: req.body.content
+        };
+
+        if (req.file) {
+            const result = await cloudinary.uploader.upload(
+                req.file.path,
+                {
+                    folder: "gracelight-formulas"
+                }
+            );
+
+            updates.image = result.secure_url;
+            fs.unlinkSync(req.file.path);
+        }
+
+        const formula = await Formula.findByIdAndUpdate(
+            req.params.id,
+            { $set: updates },
+            { new: true, runValidators: true }
+        );
+
+        if (!formula) {
+            return res.status(404).json({ success: false, message: "Note not found" });
+        }
+
+        res.json({ success: true });
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.status(500).json({
+            success: false
+        });
+
+    }
+
+});
+
 app.delete("/formulas/:id", async (req, res) => {
 
     try {

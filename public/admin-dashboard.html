@@ -232,7 +232,6 @@ button:hover{
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/tinymce@7/tinymce.min.js"></script>
-<script src="https://cdn.ckeditor.com/4.25.2-lts/standard/ckeditor.js"></script>
 </head>
 
 <body>
@@ -482,6 +481,7 @@ Total Questions: 0
     <input type="text" id="formulaTopic" placeholder="Topic (optional)">
     <input type="text" id="formulaTitle" placeholder="Note Title">
     <input type="file" id="formulaImage" accept="image/*">
+    <div id="formulaImagePreview"></div>
     <textarea id="formulaContent" placeholder="Enter note content" rows="5"></textarea>
     <button id="saveFormulaBtn" type="button">Save Note</button>
 
@@ -568,6 +568,8 @@ Total Questions: 0
 let editIndex = -1;
 let currentPin = "";
 let editingExamConfigId = null;
+let editingFormulaId = null;
+let editingFormulaImage = "";
 let examConfigs = [];
     
 let questionEditor;
@@ -577,7 +579,7 @@ let optionCEditor;
 let optionDEditor;
 
 tinymce.init({
-    selector: '#question',
+    selector: '#question, #formulaContent, #assignmentInstructions',
 
     plugins: [
         'lists',
@@ -588,10 +590,12 @@ tinymce.init({
     ],
 
     toolbar:
-        'undo redo | ' +
+        'undo redo | fontfamily fontsize | ' +
         'bold italic underline | ' +
+        'forecolor backcolor | ' +
+        'alignleft aligncenter alignright alignjustify | ' +
         'superscript subscript | ' +
-        'charmap | ' +
+        'charmap link | ' +
         'bullist numlist | ' +
         'table | ' +
         'code',
@@ -599,7 +603,9 @@ tinymce.init({
     height: 300,
 
     setup: function(editor) {
-        questionEditor = editor;
+        if(editor.id === 'question'){
+            questionEditor = editor;
+        }
     }
 });   
 
@@ -1006,8 +1012,17 @@ document.getElementById("assignmentSubject").innerHTML =
     document.getElementById("formulaSubject").innerHTML;
 
 function getEditorContent(instanceName, textareaId){
-    const editor = window.CKEDITOR && window.CKEDITOR.instances[instanceName];
-    return editor ? editor.getData() : document.getElementById(textareaId).value;
+    const editor = window.tinymce && window.tinymce.get(instanceName);
+    return editor ? editor.getContent() : document.getElementById(textareaId).value;
+}
+
+function setEditorContent(instanceName, textareaId, content){
+    const editor = window.tinymce && window.tinymce.get(instanceName);
+    if(editor){
+        editor.setContent(content);
+    }else{
+        document.getElementById(textareaId).value = content;
+    }
 }
 
 async function saveNote(){
@@ -1032,20 +1047,15 @@ async function saveNote(){
     }
 
     try{
-        const response = await fetch("/formulas", { method:"POST", body:formData });
+        const editing = Boolean(editingFormulaId);
+        const url = editing ? `/formulas/${editingFormulaId}` : "/formulas";
+        const response = await fetch(url, { method:editing ? "PUT" : "POST", body:formData });
         const result = await response.json();
 
         if(result.success){
-            alert("Note saved successfully");
-            document.getElementById("formulaTopic").value = "";
-            document.getElementById("formulaTitle").value = "";
-            document.getElementById("formulaImage").value = "";
-            if(window.CKEDITOR && window.CKEDITOR.instances.formulaContent){
-                window.CKEDITOR.instances.formulaContent.setData("");
-            }else{
-                document.getElementById("formulaContent").value = "";
-            }
-            loadFormulas();
+            alert(editing ? "Note updated successfully" : "Note saved successfully");
+            resetNoteForm();
+            await loadFormulas();
         }else{
             alert(result.message || "Error Saving Formula");
         }
@@ -1056,6 +1066,46 @@ async function saveNote(){
 }
 
 document.getElementById("saveFormulaBtn").addEventListener("click", saveNote);
+
+function resetNoteForm(){
+    editingFormulaId = null;
+    editingFormulaImage = "";
+    document.getElementById("formulaTopic").value = "";
+    document.getElementById("formulaTitle").value = "";
+    document.getElementById("formulaImage").value = "";
+    document.getElementById("formulaImagePreview").innerHTML = "";
+    document.getElementById("saveFormulaBtn").textContent = "Save Note";
+    setEditorContent("formulaContent", "formulaContent", "");
+}
+
+async function editFormula(id){
+    try{
+        const response = await fetch("/formulas");
+        const formulas = await response.json();
+        const formula = formulas.find(item => item._id === id);
+
+        if(!formula){
+            alert("Note not found");
+            return;
+        }
+
+        editingFormulaId = id;
+        editingFormulaImage = formula.image || "";
+        document.getElementById("formulaSubject").value = formula.subject || "";
+        document.getElementById("formulaTopic").value = formula.topic || "";
+        document.getElementById("formulaTitle").value = formula.title || "";
+        document.getElementById("formulaImage").value = "";
+        document.getElementById("formulaImagePreview").innerHTML = editingFormulaImage
+            ? `<div>Current image: <img src="${escapeHTML(editingFormulaImage)}" alt="Current note image" style="max-width:200px;display:block;margin:8px 0;"></div>`
+            : "";
+        setEditorContent("formulaContent", "formulaContent", formula.content || "");
+        document.getElementById("saveFormulaBtn").textContent = "Update Note";
+        document.getElementById("formulaSubject").scrollIntoView({ behavior:"smooth", block:"start" });
+    }catch(error){
+        console.log(error);
+        alert("Unable to load note for editing");
+    }
+}
 
 async function loadFormulas(){
     const formulaList = document.getElementById("formulaList");
@@ -1073,6 +1123,7 @@ async function loadFormulas(){
                     <h3>${formula.title}</h3>
                     <p>${formula.content}</p>
                     ${formula.image ? `<img src="${formula.image}" style="max-width:300px;display:block;margin-top:10px;margin-bottom:10px;">` : ""}
+                    <button type="button" class="edit-btn" onclick="editFormula('${formula._id}')">Edit</button>
                     <button type="button" class="danger-button" onclick="deleteFormula('${formula._id}')">Delete</button>
                 </div>
             `;
@@ -1119,11 +1170,7 @@ async function saveAssignment(){
         document.getElementById("assignmentTopic").value = "";
         document.getElementById("assignmentTitle").value = "";
         document.getElementById("assignmentDueDate").value = "";
-        if(window.CKEDITOR && window.CKEDITOR.instances.assignmentInstructions){
-            window.CKEDITOR.instances.assignmentInstructions.setData("");
-        }else{
-            document.getElementById("assignmentInstructions").value = "";
-        }
+        setEditorContent("assignmentInstructions", "assignmentInstructions", "");
         loadAssignments();
         alert("Assignment published. Student submissions will appear after students submit their answers.");
     }catch(error){
@@ -1133,15 +1180,6 @@ async function saveAssignment(){
 }
 
 document.getElementById("saveAssignmentBtn").addEventListener("click", saveAssignment);
-
-if(window.CKEDITOR){
-    try{
-        window.CKEDITOR.replace("formulaContent");
-        window.CKEDITOR.replace("assignmentInstructions");
-    }catch(error){
-        console.log("CKEditor initialization failed; plain text editors remain available", error);
-    }
-}
 
 async function loadAssignments(){
     const assignmentList = document.getElementById("assignmentList");
