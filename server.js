@@ -32,9 +32,24 @@ if (!fs.existsSync("uploads")) {
     fs.mkdirSync("uploads", { recursive: true });
 }
 
-mongoose.connect(process.env.MONGO_URI)
-.then(() => console.log("MongoDB Connected"))
-.catch(err => console.log(err));
+const databaseReady = mongoose.connect(process.env.MONGO_URI)
+.then(async () => {
+    console.log("MongoDB Connected");
+    try {
+        await Submission.collection.dropIndex("assignment_1_studentKey_1");
+    } catch (error) {
+        if (error.code !== 26 && error.code !== 27) throw error;
+    }
+    await Submission.collection.createIndex(
+        { assignment: 1, studentKey: 1 },
+        { name: "assignment_student_lookup" }
+    );
+    return true;
+})
+.catch(error => {
+    console.log(error);
+    return false;
+});
 
 app.use(express.json());
 
@@ -70,12 +85,14 @@ const upload = multer({
 
 const submissionUpload = multer({
     storage,
-    limits: { fileSize: 10 * 1024 * 1024 },
+    limits: { fileSize: 10 * 1024 * 1024, files: 10 },
     fileFilter(req, file, callback){
         if (file.mimetype.startsWith("image/") || file.mimetype === "application/pdf") {
             return callback(null, true);
         }
-        callback(new Error("Only image and PDF files are allowed"));
+        const error = new Error(`\"${file.originalname}\" is not an image or PDF. Choose image files or PDFs only.`);
+        error.code = "INVALID_FILE_TYPE";
+        callback(error);
     }
 });
 
@@ -420,53 +437,124 @@ app.get("/assignments/:id/submissions", async (req, res) => {
     }
 });
 
+app.delete("/assignments/:id/submissions/:submissionId/files/:fileId", async (req, res) => {
+    try {
+        const studentKey = normalizeStudentKey(req.body.studentKey);
+        if (!studentKey) {
+            return res.status(400).json({ success: false, message: "Student name is required" });
+        }
+
+        const submission = await Submission.findOne({
+            _id: req.params.submissionId,
+            assignment: req.params.id,
+            studentKey
+        });
+        if (!submission) {
+            return res.status(404).json({ success: false, message: "Uploaded file not found" });
+        }
+
+        const submissionFile = submission.files.id(req.params.fileId);
+        if (submissionFile) {
+            await cloudinary.uploader.destroy(submissionFile.publicId, {
+                resource_type: submissionFile.resourceType || "image"
+            });
+            submission.files.pull(submissionFile._id);
+        } else if (req.params.fileId === "legacy" && submission.fileUrl) {
+            if (submission.publicId) {
+                await cloudinary.uploader.destroy(submission.publicId, {
+                    resource_type: submission.resourceType || "image"
+                });
+            }
+            submission.fileUrl = undefined;
+            submission.fileName = undefined;
+            submission.fileType = undefined;
+            submission.publicId = undefined;
+            submission.resourceType = undefined;
+        } else {
+            return res.status(404).json({ success: false, message: "Uploaded file not found" });
+        }
+        await submission.save();
+        res.json({ success: true });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ success: false, message: "Unable to remove this file" });
+    }
+});
+
 app.post("/assignments/:id/submissions", (req, res, next) => {
-    submissionUpload.single("file")(req, res, error => {
+    submissionUpload.array("files", 10)(req, res, error => {
         if (error) {
-            return res.status(400).json({ success: false, message: error.message });
+            const message = error.code === "LIMIT_FILE_SIZE"
+                ? "One of the selected files is larger than 10 MB. Each file must be 10 MB or smaller."
+                : error.code === "LIMIT_FILE_COUNT" || error.code === "LIMIT_UNEXPECTED_FILE"
+                    ? "Choose no more than 10 files per submission."
+                    : error.message;
+            for (const file of req.files || []) {
+                if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+            }
+            return res.status(400).json({ success: false, message });
         }
         next();
     });
 }, async (req, res) => {
-    const tempFilePath = req.file && req.file.path;
+    const files = req.files || [];
+    const uploadedFiles = [];
+    let uploadingFile = null;
     try {
+        if (!await databaseReady) {
+            return res.status(503).json({ success: false, message: "Submission service is unavailable" });
+        }
         const studentKey = normalizeStudentKey(req.body.studentKey || req.body.studentName);
         const answer = String(req.body.answer || "").trim();
-        if (!studentKey || (!answer && !req.file)) {
+        if (!studentKey || (!answer && !files.length)) {
             return res.status(400).json({ success: false, message: "Student name and an answer or file are required" });
         }
 
-        let uploadedFile = null;
-        if (req.file) {
-            const result = await cloudinary.uploader.upload(req.file.path, {
+        for (const file of files) {
+            uploadingFile = file;
+            const result = await cloudinary.uploader.upload(file.path, {
                 folder: "gracelight-assignment-submissions",
                 resource_type: "auto"
             });
-            uploadedFile = {
-                fileUrl: result.secure_url,
-                fileName: req.file.originalname,
-                fileType: req.file.mimetype
-            };
+            uploadedFiles.push({
+                url: result.secure_url,
+                originalName: file.originalname,
+                publicId: result.public_id,
+                fileType: file.mimetype,
+                resourceType: result.resource_type
+            });
         }
 
-        const fieldsToSet = {
+        uploadingFile = null;
+        const submission = await Submission.create({
+            assignment: req.params.id,
+            studentKey,
             studentName: req.body.studentName || studentKey,
             answer,
+            files: uploadedFiles,
             submittedAt: new Date()
-        };
-        if (uploadedFile) Object.assign(fieldsToSet, uploadedFile);
-
-        const submission = await Submission.findOneAndUpdate(
-            { assignment: req.params.id, studentKey },
-            { $set: fieldsToSet },
-            { new: true, upsert: true, runValidators: true }
-        );
+        });
+        uploadedFiles.length = 0;
         res.json({ success: true, submissionId: submission._id });
     } catch (error) {
         console.log(error);
-        res.status(500).json({ success: false });
+        for (const file of uploadedFiles) {
+            try {
+                await cloudinary.uploader.destroy(file.publicId, {
+                    resource_type: file.resourceType || "image"
+                });
+            } catch (cleanupError) {
+                console.log(cleanupError);
+            }
+        }
+        const message = uploadingFile
+            ? `Unable to upload \"${uploadingFile.originalname}\". No submission was saved.`
+            : "Unable to save your submission. No submission was saved.";
+        res.status(500).json({ success: false, message });
     } finally {
-        if (tempFilePath && fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+        for (const file of files) {
+            if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        }
     }
 });
 

@@ -87,6 +87,16 @@ input,select,textarea{
 .primary-button:hover{background:var(--green-dark)}
 .saved-file{margin-top:10px}
 .saved-file img{max-width:100%;max-height:360px}
+.saved-file-item{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-top:12px}
+.saved-file-details{min-width:0}
+.selected-files{margin-top:12px}
+.selected-file-list{display:grid;gap:10px;margin-top:8px}
+.selected-file-item{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.selected-file-details{min-width:0;overflow-wrap:anywhere}
+.selected-file-details img{display:block;max-width:120px;max-height:100px;margin-top:6px}
+.upload-status{min-height:1.5em;margin-top:12px;color:var(--muted)}
+.remove-file-button{padding:5px 9px;border:1px solid #aebbc0;border-radius:4px;background:white;color:var(--ink);font:inherit;cursor:pointer}
+.remove-file-button:hover{border-color:var(--green);color:var(--green-dark)}
 .status{padding:24px 0;color:var(--muted)}
 @media(max-width:700px){
     body{padding:16px}
@@ -143,6 +153,7 @@ const commonSubjects = [
 let notes = [];
 let assignments = [];
 let activeTab = "notes";
+const stagedAssignmentFiles = new Map();
 
 function escapeHTML(value){
     return String(value || "").replace(/[&<>"']/g, character => ({
@@ -235,14 +246,18 @@ function renderResources(){
                     <textarea id="answer-${assignment._id}" placeholder="Write your answer"></textarea>
                 </div>
                 <div class="field">
-                    <label for="file-${assignment._id}">Upload a photo or PDF (optional)</label>
-                    <input id="file-${assignment._id}" type="file" accept="image/*,application/pdf">
+                    <label>Assignment files (optional)</label>
+                    <input id="file-${assignment._id}" type="file" accept="image/*,application/pdf" multiple hidden onchange="stageAssignmentFiles('${assignment._id}', this)">
+                    <button id="add-files-${assignment._id}" class="primary-button" type="button" onclick="document.getElementById('file-${assignment._id}').click()">Add files</button>
                 </div>
+                <div id="selected-files-${assignment._id}" class="selected-files" hidden></div>
                 <div id="saved-file-${assignment._id}" class="saved-file"></div>
-                <button class="primary-button" type="button" onclick="submitStudentAssignment('${assignment._id}')">Submit answer</button>
+                <div id="upload-status-${assignment._id}" class="upload-status" role="status" aria-live="polite"></div>
+                <button id="submit-${assignment._id}" class="primary-button" type="button" onclick="submitStudentAssignment('${assignment._id}')">Submit answer</button>
             </div>
         </article>
     `).join("");
+    visibleResources.forEach(assignment => renderStagedAssignmentFiles(assignment._id));
     loadSavedStudentAnswers(visibleResources);
 }
 
@@ -253,13 +268,21 @@ async function loadSavedStudentAnswers(visibleAssignments){
         try{
             const response = await fetch(`/assignments/${assignment._id}/submissions?studentKey=${encodeURIComponent(name)}`);
             const submissions = await response.json();
-            const submission = submissions[0];
-            if(!submission) return;
+            if(!Array.isArray(submissions)) return;
             const answerField = document.getElementById(`answer-${assignment._id}`);
-            if(answerField) answerField.value = submission.answer || "";
+            const answerSubmission = submissions.find(submission => submission.answer);
+            if(answerField && answerSubmission) answerField.value = answerSubmission.answer;
             const savedFile = document.getElementById(`saved-file-${assignment._id}`);
-            if(savedFile && submission.fileUrl){
-                savedFile.innerHTML = `<a href="${escapeHTML(submission.fileUrl)}" target="_blank" rel="noopener">Previously uploaded: ${escapeHTML(submission.fileName || "View file")}</a>${submission.fileType && submission.fileType.startsWith("image/") ? `<img src="${escapeHTML(submission.fileUrl)}" alt="${escapeHTML(submission.fileName || "Uploaded assignment image")}">` : ""}`;
+            if(savedFile){
+                savedFile.innerHTML = submissions.map(submission => normalizeSubmissionFiles(submission).map(file => `
+                        <div class="saved-file-item">
+                            <div class="saved-file-details">
+                                <a href="${escapeHTML(file.url)}" target="_blank" rel="noopener">${escapeHTML(file.name)}</a>
+                                ${file.type && file.type.startsWith("image/") ? `<img src="${escapeHTML(file.url)}" alt="${escapeHTML(file.name)}">` : ""}
+                            </div>
+                            <button class="remove-file-button" type="button" onclick="removeStudentAssignmentFile('${assignment._id}', '${submission._id}', '${file.id}')">Remove</button>
+                        </div>
+                    `).join("")).join("");
             }
         }catch(error){
             console.log(error);
@@ -267,18 +290,89 @@ async function loadSavedStudentAnswers(visibleAssignments){
     }));
 }
 
+function normalizeSubmissionFiles(submission){
+    const files = (Array.isArray(submission.files) ? submission.files : []).map(file => ({
+        id: file._id,
+        url: file.url,
+        name: file.originalName || "Uploaded file",
+        type: file.fileType || ""
+    }));
+    if(submission.fileUrl){
+        files.push({
+            id: "legacy",
+            url: submission.fileUrl,
+            name: submission.fileName || "Uploaded file",
+            type: submission.fileType || ""
+        });
+    }
+    return files;
+}
+
+function renderStagedAssignmentFiles(assignmentId){
+    const selectedFiles = stagedAssignmentFiles.get(assignmentId) || [];
+    const container = document.getElementById(`selected-files-${assignmentId}`);
+    const addButton = document.getElementById(`add-files-${assignmentId}`);
+    container.hidden = selectedFiles.length === 0;
+    addButton.textContent = selectedFiles.length ? "Add more files" : "Add files";
+    container.innerHTML = selectedFiles.length ? `
+        <strong>Selected files</strong>
+        <div class="selected-file-list">${selectedFiles.map((item, index) => `
+            <div class="selected-file-item">
+                <div class="selected-file-details">
+                    ${escapeHTML(item.file.name)}
+                    ${item.previewUrl ? `<img src="${escapeHTML(item.previewUrl)}" alt="Preview of ${escapeHTML(item.file.name)}">` : ""}
+                </div>
+                <button class="remove-file-button" type="button" onclick="removeStagedAssignmentFile('${assignmentId}', ${index})">Remove</button>
+            </div>
+        `).join("")}</div>
+    ` : "";
+}
+
+function stageAssignmentFiles(assignmentId, input){
+    const incomingFiles = Array.from(input.files);
+    input.value = "";
+    const selectedFiles = stagedAssignmentFiles.get(assignmentId) || [];
+    if(selectedFiles.length + incomingFiles.length > 10){
+        alert("You can submit up to 10 files at a time.");
+        return;
+    }
+    const invalidFile = incomingFiles.find(file => !file.type.startsWith("image/") && file.type !== "application/pdf");
+    if(invalidFile){
+        alert(`\"${invalidFile.name}\" is not an image or PDF. Choose image files or PDFs only.`);
+        return;
+    }
+    const oversizedFile = incomingFiles.find(file => file.size > 10 * 1024 * 1024);
+    if(oversizedFile){
+        alert(`\"${oversizedFile.name}\" is larger than 10 MB. Each file must be 10 MB or smaller.`);
+        return;
+    }
+    incomingFiles.forEach(file => selectedFiles.push({
+        file,
+        previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : ""
+    }));
+    stagedAssignmentFiles.set(assignmentId, selectedFiles);
+    renderStagedAssignmentFiles(assignmentId);
+}
+
+function removeStagedAssignmentFile(assignmentId, index){
+    const selectedFiles = stagedAssignmentFiles.get(assignmentId) || [];
+    const [removedFile] = selectedFiles.splice(index, 1);
+    if(removedFile && removedFile.previewUrl) URL.revokeObjectURL(removedFile.previewUrl);
+    stagedAssignmentFiles.set(assignmentId, selectedFiles);
+    renderStagedAssignmentFiles(assignmentId);
+}
+
 async function submitStudentAssignment(assignmentId){
     const name = studentNameField.value.trim();
     const answerField = document.getElementById(`answer-${assignmentId}`);
-    const fileField = document.getElementById(`file-${assignmentId}`);
-    const file = fileField.files[0];
+    const selectedFiles = stagedAssignmentFiles.get(assignmentId) || [];
     const answer = answerField.value.trim();
     if(!name){
         alert("Enter your name before submitting");
         studentNameField.focus();
         return;
     }
-    if(!answer && !file){
+    if(!answer && !selectedFiles.length){
         alert("Write an answer or choose an image/PDF file");
         return;
     }
@@ -287,7 +381,13 @@ async function submitStudentAssignment(assignmentId){
     formData.append("studentName", name);
     formData.append("studentKey", name);
     formData.append("answer", answer);
-    if(file) formData.append("file", file);
+    selectedFiles.forEach(item => formData.append("files", item.file));
+    const submitButton = document.getElementById(`submit-${assignmentId}`);
+    const addButton = document.getElementById(`add-files-${assignmentId}`);
+    const uploadStatus = document.getElementById(`upload-status-${assignmentId}`);
+    submitButton.disabled = true;
+    addButton.disabled = true;
+    uploadStatus.textContent = "Uploading...";
     try{
         const response = await fetch(`/assignments/${assignmentId}/submissions`, {
             method:"POST",
@@ -296,12 +396,44 @@ async function submitStudentAssignment(assignmentId){
         const result = await response.json();
         if(!response.ok || !result.success) throw new Error(result.message || "Submission failed");
         localStorage.setItem("candidateName", name);
-        fileField.value = "";
+        selectedFiles.forEach(item => {
+            if(item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+        });
+        stagedAssignmentFiles.set(assignmentId, []);
+        renderStagedAssignmentFiles(assignmentId);
         await loadSavedStudentAnswers(assignments.filter(assignment => assignment._id === assignmentId));
-        alert("Answer submitted");
+        uploadStatus.textContent = "Submission uploaded successfully.";
     }catch(error){
         console.log(error);
+        uploadStatus.textContent = "Upload failed. Your selected files are still available to retry.";
         alert(error.message || "Unable to submit your answer");
+    }finally{
+        submitButton.disabled = false;
+        addButton.disabled = false;
+    }
+}
+
+async function removeStudentAssignmentFile(assignmentId, submissionId, fileId){
+    const name = studentNameField.value.trim();
+    if(!name){
+        alert("Enter your name before removing an upload");
+        studentNameField.focus();
+        return;
+    }
+    if(!confirm("Remove this uploaded file?")) return;
+
+    try{
+        const response = await fetch(`/assignments/${assignmentId}/submissions/${submissionId}/files/${fileId}`, {
+            method:"DELETE",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({studentKey:name})
+        });
+        const result = await response.json();
+        if(!response.ok || !result.success) throw new Error(result.message || "Unable to remove this file");
+        await loadSavedStudentAnswers(assignments.filter(assignment => assignment._id === assignmentId));
+    }catch(error){
+        console.log(error);
+        alert(error.message || "Unable to remove this file");
     }
 }
 

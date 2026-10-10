@@ -1216,19 +1216,33 @@ async function loadAssignmentSubmissions(assignmentId){
             panel.innerHTML += "<p>No student answers have been submitted yet. Saving an assignment publishes it; students must submit their answers from the student Notes &amp; Assignments page.</p>";
             return;
         }
-        panel.innerHTML += submissions.map(submission => `
+        panel.innerHTML += submissions.map(submission => {
+            const files = (Array.isArray(submission.files) ? submission.files.map(file => ({
+                url: file.url,
+                name: file.originalName || "View uploaded file",
+                type: file.fileType || ""
+            })) : []);
+            if(submission.fileUrl){
+                files.push({
+                    url: submission.fileUrl,
+                    name: submission.fileName || "View uploaded file",
+                    type: submission.fileType || ""
+                });
+            }
+            return `
             <article class="submission-card">
                 <b>${escapeHTML(submission.studentName || submission.studentKey)}</b>
                 <small>${escapeHTML(new Date(submission.submittedAt).toLocaleString())}</small>
                 <div style="white-space:pre-wrap;margin-top:10px">${escapeHTML(submission.answer)}</div>
-                ${submission.fileUrl ? `
+                ${files.map(file => `
                     <div style="margin-top:12px">
-                        <a href="${escapeHTML(submission.fileUrl)}" target="_blank" rel="noopener">${escapeHTML(submission.fileName || "View uploaded file")}</a>
-                        ${submission.fileType && submission.fileType.startsWith("image/") ? `<img src="${escapeHTML(submission.fileUrl)}" alt="${escapeHTML(submission.fileName || "Student assignment image")}" style="display:block;max-width:100%;max-height:500px;margin-top:8px">` : ""}
+                        <a href="${escapeHTML(file.url)}" target="_blank" rel="noopener">${escapeHTML(file.name)}</a>
+                        ${file.type.startsWith("image/") ? `<img src="${escapeHTML(file.url)}" alt="${escapeHTML(file.name)}" style="display:block;max-width:100%;max-height:500px;margin-top:8px">` : ""}
                     </div>
-                ` : ""}
+                `).join("")}
             </article>
-        `).join("");
+        `;
+        }).join("");
     }catch(error){
         console.log(error);
         panel.textContent = "Unable to load submissions.";
