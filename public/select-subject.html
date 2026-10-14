@@ -204,15 +204,22 @@ return;
 }
 
 localStorage.removeItem("examTime");
+localStorage.removeItem("exitCount");
+localStorage.removeItem("examFlagCount");
 
 try {
     const response = await fetch(`/exam-config/${encodeURIComponent(subject)}/${encodeURIComponent(topic)}`);
     const config = await response.json();
     const durationMinutes = Number(config && config.durationMinutes ? config.durationMinutes : 30);
+    const graceSeconds = Number(config && Number.isFinite(Number(config.graceSeconds)) ? Number(config.graceSeconds) : 10);
+    const maxFlagsBeforeAutoSubmit = Number(config && Number.isFinite(Number(config.maxFlagsBeforeAutoSubmit)) ? Number(config.maxFlagsBeforeAutoSubmit) : 0);
+    const showWarnings = config && typeof config.showWarnings === "boolean" ? config.showWarnings : true;
     localStorage.setItem("examDurationMinutes", String(durationMinutes));
+    localStorage.setItem("examConfig", JSON.stringify({ graceSeconds, maxFlagsBeforeAutoSubmit, showWarnings }));
 } catch (error) {
     console.log(error);
     localStorage.setItem("examDurationMinutes", "30");
+    localStorage.setItem("examConfig", JSON.stringify({ graceSeconds: 10, maxFlagsBeforeAutoSubmit: 0, showWarnings: true }));
 }
 
 localStorage.setItem("candidateName", name);

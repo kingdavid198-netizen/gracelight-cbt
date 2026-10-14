@@ -255,6 +255,7 @@ if(localStorage.getItem("adminAuthorized") !== "true"){
     <button type="button" data-section="questionsSection" onclick="showAdminSection('questionsSection', this)">Questions</button>
     <button type="button" data-section="pinSection" onclick="showAdminSection('pinSection', this)">Pin Generation</button>
     <button type="button" data-section="resultsSection" onclick="showAdminSection('resultsSection', this)">Results</button>
+    <button type="button" data-section="integritySection" onclick="showAdminSection('integritySection', this)">Integrity Flags</button>
     <button type="button" data-section="formulaSection" onclick="showAdminSection('formulaSection', this)">Notes &amp; Assignments</button>
 </nav>
 
@@ -427,6 +428,30 @@ Total Questions: 0
             </tr>
         </thead>
         <tbody id="resultsBody"></tbody>
+    </table>
+</section>
+
+<section id="integritySection" class="admin-section">
+    <h2>Integrity Flags</h2>
+    <div class="stats">
+        This review panel shows page-hidden events captured by the browser and sent to the server. Short screen locks are evidence for review, not proof of cheating.
+    </div>
+    <table class="results-table">
+        <thead>
+            <tr>
+                <th>Student</th>
+                <th>Subject</th>
+                <th>Topic</th>
+                <th>Type</th>
+                <th>Hidden Seconds</th>
+                <th>Client Time</th>
+                <th>Server Time</th>
+                <th>User-Agent</th>
+            </tr>
+        </thead>
+        <tbody id="integrityBody">
+            <tr><td colspan="8">Loading integrity events...</td></tr>
+        </tbody>
     </table>
 </section>
 
@@ -898,6 +923,10 @@ function showAdminSection(sectionId, button){
         loadResults();
     }
 
+    if(sectionId === "integritySection"){
+        loadIntegrityEvents();
+    }
+
     if(sectionId === "formulaSection"){
         loadFormulas();
         loadAssignments();
@@ -945,6 +974,37 @@ async function loadResults(){
     }catch(error){
         console.log(error);
         resultsBody.innerHTML = '<tr><td colspan="9">Error Loading Results</td></tr>';
+    }
+}
+
+async function loadIntegrityEvents(){
+    const integrityBody = document.getElementById("integrityBody");
+    integrityBody.innerHTML = '<tr><td colspan="8">Loading integrity events...</td></tr>';
+
+    try {
+        const response = await fetch("/integrity-events");
+        const events = await response.json();
+
+        if (!Array.isArray(events) || events.length === 0) {
+            integrityBody.innerHTML = '<tr><td colspan="8">No integrity events found.</td></tr>';
+            return;
+        }
+
+        integrityBody.innerHTML = events.map(event => `
+            <tr>
+                <td>${escapeHTML(event.studentKey || "N/A")}</td>
+                <td>${escapeHTML(event.subject || "N/A")}</td>
+                <td>${escapeHTML(event.topic || "N/A")}</td>
+                <td>${escapeHTML(event.type || "N/A")}</td>
+                <td>${Number(event.hiddenSeconds || 0)}</td>
+                <td>${new Date(Number(event.clientTimestamp || Date.now())).toLocaleString()}</td>
+                <td>${new Date(Number(event.serverTimestamp || Date.now())).toLocaleString()}</td>
+                <td>${escapeHTML(event.userAgent || "N/A")}</td>
+            </tr>
+        `).join("");
+    } catch (error) {
+        console.log(error);
+        integrityBody.innerHTML = '<tr><td colspan="8">Unable to load integrity events.</td></tr>';
     }
 }
 
