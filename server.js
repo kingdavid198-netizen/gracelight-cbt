@@ -5,7 +5,15 @@ const multer = require("multer");
 const path = require("path");
 const XLSX = require("xlsx");
 const mongoose = require("mongoose");
+const crypto = require("crypto");
 const Question = require("./Question");
+const ExamAttempt = require("./ExamAttempt");
+const markAttempt = require("./exam-marking");
+const {
+    finalizeAttemptResult,
+    formatLagosDate,
+    getAttemptAnswerConflict
+} = require("./attempt-result");
 const Result = require("./Result");
 const Pin = require("./Pin");
 const Formula = require("./Formula");
@@ -19,17 +27,22 @@ const app = express();
 app.set("trust proxy", 1);
 
 const integrityIpBuckets = new Map();
+const answerAttemptBuckets = new Map();
 const integrityRateWindowMs = 60 * 1000;
 const integrityRateLimit = 30;
+const attemptAnswerRateLimit = 120;
+const attemptSubmitGraceMs = 15 * 1000;
 
 const integrityBucketCleanup = setInterval(() => {
     const cutoff = Date.now() - integrityRateWindowMs;
-    for (const [key, timestamps] of integrityIpBuckets) {
-        const recent = timestamps.filter(timestamp => timestamp > cutoff);
-        if (recent.length) {
-            integrityIpBuckets.set(key, recent);
-        } else {
-            integrityIpBuckets.delete(key);
+    for (const buckets of [integrityIpBuckets, answerAttemptBuckets]) {
+        for (const [key, timestamps] of buckets) {
+            const recent = timestamps.filter(timestamp => timestamp > cutoff);
+            if (recent.length) {
+                buckets.set(key, recent);
+            } else {
+                buckets.delete(key);
+            }
         }
     }
 }, integrityRateWindowMs);
@@ -578,6 +591,7 @@ app.post("/assignments/:id/submissions", (req, res, next) => {
     }
 });
 
+// TODO: /questions exposes answer keys; protect it with admin authentication in the security phase.
 app.get("/questions", async (req, res) => {
 
     try {
@@ -595,6 +609,303 @@ app.get("/questions", async (req, res) => {
     }
 
 });
+
+function shuffleItems(items) {
+    const shuffled = [...items];
+    for (let index = shuffled.length - 1; index > 0; index--) {
+        const swapIndex = crypto.randomInt(index + 1);
+        [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+    }
+    return shuffled;
+}
+
+function getAttemptOptionOrder(attempt) {
+    return new Map((attempt.optionOrder || []).map(entry => [String(entry.questionId), entry.order]));
+}
+
+async function getAttemptQuestions(attempt) {
+    const questions = await Question.find({ _id: { $in: attempt.questionIds } }).lean();
+    const questionMap = new Map(questions.map(question => [String(question._id), question]));
+    const optionOrder = getAttemptOptionOrder(attempt);
+    const labels = ["A", "B", "C", "D"];
+    return attempt.questionIds.map((questionId, index) => {
+        const question = questionMap.get(String(questionId));
+        if (!question) return null;
+        const order = optionOrder.get(String(questionId)) || labels;
+        const options = {};
+        labels.forEach((label, optionIndex) => {
+            options[label] = question[`option${order[optionIndex]}`] || "";
+        });
+        return {
+            questionId: String(question._id),
+            questionNumber: index + 1,
+            question: question.question || "",
+            image: question.image || "",
+            options
+        };
+    }).filter(Boolean);
+}
+
+async function buildAttemptResponse(attempt, now = new Date()) {
+    const response = {
+        attemptId: attempt.attemptId,
+        studentKey: attempt.studentKey,
+        candidateName: attempt.candidateName,
+        subject: attempt.subject,
+        topic: attempt.topic,
+        startedAt: attempt.startedAt,
+        endsAt: attempt.endsAt,
+        serverNow: now,
+        status: attempt.status,
+        questions: await getAttemptQuestions(attempt),
+        answers: attempt.answers || {}
+    };
+    if (attempt.status !== "active") {
+        const result = attempt.resultId ? await Result.findById(attempt.resultId).lean() : null;
+        response.result = result || null;
+        response.resultId = result ? String(result._id) : null;
+    }
+    return response;
+}
+
+async function finalizeAttempt(attempt, finalizedAt = new Date()) {
+    const finalized = await finalizeAttemptResult(attempt, finalizedAt, {
+        findResultById: resultId => Result.findById(resultId),
+        claimResultId: (attemptId, resultId, submittedAt) => ExamAttempt.findOneAndUpdate(
+            {
+                attemptId,
+                status: "active",
+                $or: [{ resultId: { $exists: false } }, { resultId: null }]
+            },
+            { $set: { resultId, submittedAt } },
+            { new: true }
+        ),
+        findAttempt: attemptId => ExamAttempt.findOne({ attemptId }),
+        buildResult: async (resultId, claimedAttempt, resultDate) => {
+            const questions = await Question.find({ _id: { $in: claimedAttempt.questionIds } }).lean();
+            const questionMap = new Map(questions.map(question => [String(question._id), question]));
+            const optionOrder = getAttemptOptionOrder(claimedAttempt);
+            const answers = claimedAttempt.answers || {};
+            const orderedQuestions = claimedAttempt.questionIds
+                .map(questionId => questionMap.get(String(questionId)))
+                .filter(Boolean);
+            const { score, review: answersReview } = markAttempt(orderedQuestions, optionOrder, answers);
+
+            const totalQuestions = claimedAttempt.questionIds.length;
+            const percentage = totalQuestions ? Math.round((score / totalQuestions) * 100) : 0;
+            const remark = percentage >= 80 ? "Excellent" : percentage >= 50 ? "Pass" : "Fail";
+            return new Result({
+                _id: resultId,
+                studentKey: claimedAttempt.studentKey,
+                candidateName: claimedAttempt.candidateName,
+                subject: claimedAttempt.subject,
+                topic: claimedAttempt.topic,
+                score,
+                totalQuestions,
+                percentage,
+                remark,
+                date: formatLagosDate(resultDate),
+                answersReview
+            });
+        },
+        saveResult: resultDocument => resultDocument.save(),
+        completeAttempt: async (currentAttempt, result, resultDate) => {
+            const status = resultDate.getTime() >= currentAttempt.endsAt.getTime() + attemptSubmitGraceMs
+                ? "expired"
+                : "submitted";
+            const updatedAttempt = await ExamAttempt.findOneAndUpdate(
+                { attemptId: currentAttempt.attemptId, status: "active" },
+                { $set: { status, submittedAt: resultDate, resultId: result._id } },
+                { new: true }
+            );
+            return updatedAttempt || ExamAttempt.findOne({ attemptId: currentAttempt.attemptId });
+        }
+    });
+    return finalized;
+}
+
+function rateLimitAttemptAnswers(req, res, next) {
+    const attemptId = req.params.attemptId;
+    const now = Date.now();
+    const recent = (answerAttemptBuckets.get(attemptId) || []).filter(timestamp => now - timestamp < integrityRateWindowMs);
+    if (recent.length >= attemptAnswerRateLimit) {
+        answerAttemptBuckets.set(attemptId, recent);
+        return res.status(429).json({ success: false, message: "Too many answer saves" });
+    }
+    recent.push(now);
+    answerAttemptBuckets.set(attemptId, recent);
+    next();
+}
+
+app.post("/attempt/start", async (req, res) => {
+    try {
+        const body = req.body || {};
+        const allowedFields = new Set(["studentKey", "candidateName", "subject", "topic"]);
+        if (typeof body !== "object" || Array.isArray(body) || Object.keys(body).some(key => !allowedFields.has(key))) {
+            return res.status(400).json({ success: false, message: "Invalid exam start request" });
+        }
+        if (typeof body.studentKey !== "string") {
+            return res.status(400).json({ success: false, message: "Student key must be a string" });
+        }
+        const studentKey = normalizeStudentKey(body.studentKey);
+        const candidateName = typeof body.candidateName === "string" ? body.candidateName.trim() : "";
+        const subject = typeof body.subject === "string" ? body.subject.trim() : "";
+        const topic = typeof body.topic === "string" ? body.topic.trim() : "";
+        if (!studentKey || studentKey.length > 200 || !candidateName || candidateName.length > 200 || !subject || subject.length > 200 || !topic || topic.length > 200) {
+            return res.status(400).json({ success: false, message: "Candidate, student key, subject and topic are required" });
+        }
+
+        const now = new Date();
+        let activeAttempt = await ExamAttempt.findOne({ studentKey, subject, topic, status: "active" });
+        if (activeAttempt && now.getTime() >= activeAttempt.endsAt.getTime() + attemptSubmitGraceMs) {
+            await finalizeAttempt(activeAttempt, now);
+            activeAttempt = null;
+        }
+        if (activeAttempt) {
+            return res.json(await buildAttemptResponse(activeAttempt, now));
+        }
+
+        const questions = await Question.find({ subject, topic }).select("_id").lean();
+        if (!questions.length) {
+            return res.status(404).json({ success: false, message: "No questions are available for this exam" });
+        }
+
+        let config = await ExamConfig.findOne({ subject, topic });
+        if (!config) config = await ExamConfig.findOne({ subject, topic: "" });
+        const configuredDuration = Number(config && config.durationMinutes);
+        const durationMinutes = Number.isFinite(configuredDuration) && configuredDuration > 0 ? configuredDuration : 30;
+        const orderedQuestions = shuffleItems(questions);
+        const labels = ["A", "B", "C", "D"];
+        const optionOrder = orderedQuestions.map(question => ({
+            questionId: question._id,
+            order: shuffleItems(labels)
+        }));
+        const startedAt = new Date();
+        const attempt = new ExamAttempt({
+            attemptId: crypto.randomUUID(),
+            studentKey,
+            candidateName,
+            subject,
+            topic,
+            questionIds: orderedQuestions.map(question => question._id),
+            optionOrder,
+            answers: {},
+            startedAt,
+            endsAt: new Date(startedAt.getTime() + durationMinutes * 60 * 1000),
+            status: "active"
+        });
+
+        try {
+            await attempt.save();
+        } catch (error) {
+            if (error.code !== 11000) throw error;
+            const concurrentAttempt = await ExamAttempt.findOne({ studentKey, subject, topic, status: "active" });
+            if (!concurrentAttempt) throw error;
+            return res.json(await buildAttemptResponse(concurrentAttempt, new Date()));
+        }
+        return res.json(await buildAttemptResponse(attempt, new Date()));
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ success: false, message: "Unable to start or resume the exam" });
+    }
+});
+
+app.get("/attempt/:attemptId", async (req, res) => {
+    try {
+        let attempt = await ExamAttempt.findOne({ attemptId: req.params.attemptId });
+        if (!attempt) return res.status(404).json({ success: false, message: "Exam attempt was not found" });
+        const now = new Date();
+        if (attempt.status === "active" && now.getTime() >= attempt.endsAt.getTime() + attemptSubmitGraceMs) {
+            const finalized = await finalizeAttempt(attempt, now);
+            attempt = finalized.attempt;
+        }
+        return res.json(await buildAttemptResponse(attempt, now));
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ success: false, message: "Unable to load this exam attempt" });
+    }
+});
+
+app.put("/attempt/:attemptId/answers", rateLimitAttemptAnswers, async (req, res) => {
+    try {
+        const body = req.body || {};
+        if (!body.answers || typeof body.answers !== "object" || Array.isArray(body.answers) || Object.keys(body).some(key => key !== "answers")) {
+            return res.status(400).json({ success: false, message: "An answers object is required" });
+        }
+        const attempt = await ExamAttempt.findOne({ attemptId: req.params.attemptId });
+        if (!attempt) return res.status(404).json({ success: false, message: "Exam attempt was not found" });
+        const conflict = getAttemptAnswerConflict(attempt);
+        if (conflict === "finalizing") return res.status(409).json({ success: false, message: "This exam attempt is being finalized" });
+        if (conflict === "inactive") return res.status(409).json({ success: false, message: "This exam attempt is no longer active" });
+        if (conflict === "deadline") return res.status(409).json({ success: false, message: "The exam deadline has passed" });
+
+        const questionIds = new Set(attempt.questionIds.map(id => String(id)));
+        const allowedOptions = new Set(["A", "B", "C", "D"]);
+        const changes = Object.entries(body.answers);
+        if (!changes.length || changes.length > questionIds.size) {
+            return res.status(400).json({ success: false, message: "The answer changes are invalid" });
+        }
+        for (const [questionId, selected] of changes) {
+            if (!questionIds.has(questionId) || typeof selected !== "string" || !allowedOptions.has(selected)) {
+                return res.status(400).json({ success: false, message: "One or more submitted answers are invalid" });
+            }
+        }
+        const answers = { ...(attempt.answers || {}) };
+        for (const [questionId, selected] of changes) answers[questionId] = selected;
+        attempt.answers = answers;
+        attempt.markModified("answers");
+        await attempt.save();
+        res.json({ success: true, serverNow: new Date() });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ success: false, message: "Unable to save exam answers" });
+    }
+});
+
+app.post("/attempt/:attemptId/submit", async (req, res) => {
+    try {
+        let attempt = await ExamAttempt.findOne({ attemptId: req.params.attemptId });
+        if (!attempt) return res.status(404).json({ success: false, message: "Exam attempt was not found" });
+        let result = attempt.resultId ? await Result.findById(attempt.resultId) : null;
+        if (attempt.status === "active" || !result) {
+            const finalized = await finalizeAttempt(attempt, new Date());
+            attempt = finalized.attempt;
+            result = finalized.result;
+        }
+        if (!result) return res.status(500).json({ success: false, message: "Unable to finalize exam result" });
+        const resultData = result.toObject();
+        return res.json({
+            success: true,
+            resultId: String(result._id),
+            score: result.score,
+            total: result.totalQuestions,
+            percentage: result.percentage,
+            remark: result.remark,
+            review: result.answersReview || [],
+            result: resultData,
+            status: attempt.status
+        });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ success: false, message: "Unable to submit exam" });
+    }
+});
+
+const attemptExpirySweep = setInterval(async () => {
+    try {
+        const now = new Date();
+        const expiredAttempts = await ExamAttempt.find({
+            status: "active",
+            endsAt: { $lte: new Date(now.getTime() - attemptSubmitGraceMs) }
+        }).limit(50);
+        for (const attempt of expiredAttempts) {
+            await finalizeAttempt(attempt, now);
+        }
+    } catch (error) {
+        console.log(error);
+    }
+}, 15000);
+if (typeof attemptExpirySweep.unref === "function") attemptExpirySweep.unref();
 
 app.get("/exam-config", async (req, res) => {
     try {
@@ -1065,7 +1376,7 @@ function validateIntegrityEvent(req, res, next) {
         return res.status(400).json({ success: false, message: "A JSON object is required" });
     }
 
-    const allowedKeys = new Set(["studentKey", "candidateName", "subject", "topic", "type", "hiddenSeconds", "clientTimestamp", "userAgent"]);
+    const allowedKeys = new Set(["studentKey", "candidateName", "subject", "topic", "type", "hiddenSeconds", "clientTimestamp", "userAgent", "attemptId"]);
     if (Object.keys(body).some(key => !allowedKeys.has(key))) {
         return res.status(400).json({ success: false, message: "Unknown integrity fields are not allowed" });
     }
@@ -1080,7 +1391,7 @@ function validateIntegrityEvent(req, res, next) {
         return res.status(400).json({ success: false, message: "hiddenSeconds must be a number between 0 and 86400" });
     }
 
-    const stringLimits = { candidateName: 200, subject: 200, topic: 200, userAgent: 500 };
+    const stringLimits = { candidateName: 200, subject: 200, topic: 200, userAgent: 500, attemptId: 100 };
     for (const [field, maxLength] of Object.entries(stringLimits)) {
         if (typeof body[field] !== "undefined" && (typeof body[field] !== "string" || body[field].length > maxLength)) {
             return res.status(400).json({ success: false, message: `${field} must be a string no longer than ${maxLength} characters` });
@@ -1103,6 +1414,7 @@ function validateIntegrityEvent(req, res, next) {
     req.integrityEvent = {
         studentKey: normalizeStudentKey(body.studentKey),
         candidateName: body.candidateName || "",
+        attemptId: body.attemptId || undefined,
         subject: body.subject || "",
         topic: body.topic || "",
         type: body.type,
@@ -1163,6 +1475,7 @@ app.get("/integrity-events", async (req, res) => {
             _id: item._id,
             studentKey: item.studentKey,
             candidateName: item.candidateName || "",
+            attemptId: item.attemptId || undefined,
             subject: item.subject || "",
             topic: item.topic || "",
             type: item.type,
@@ -1211,7 +1524,7 @@ app.post("/save-result", async (req, res) => {
 
         console.log(error);
 
-        res.json({
+        res.status(500).json({
             success: false
         });
 
