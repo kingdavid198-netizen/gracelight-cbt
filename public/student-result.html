@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Student Result</title>
+<title>CBT Result Slip</title>
 
 <style>
 
@@ -176,6 +176,31 @@ body {
     font-size: 0.96rem;
 }
 
+.result-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.download-btn {
+    margin-top: 16px;
+    padding: 12px 20px;
+    border: none;
+    background: #0f766e;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.96rem;
+}
+
+.download-status {
+    min-height: 1.2em;
+    margin-top: 8px;
+    color: #b91c1c;
+    font-size: 0.9rem;
+}
+
 .review-section {
     margin-top: 24px;
 }
@@ -325,20 +350,105 @@ body {
 }
 
 @media print {
-    .print-btn,
-    .history-panel,
-    .no-print {
-        display: none !important;
+    @page {
+        size: A4;
+        margin: 0;
+    }
+
+    html,
+    body {
+        width: 210mm;
+        margin: 0;
+        padding: 0;
+        background: #fff;
+        font-size: 9.5pt;
+    }
+
+    .container {
+        width: 100%;
+        max-width: none;
+        margin: 0 auto;
+        padding: 15mm;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .school-header {
+        margin-bottom: 8mm;
+    }
+
+    .school-logo {
+        width: 18mm;
+        height: 18mm;
+        margin-bottom: 1mm;
+    }
+
+    .school-header h1 {
+        font-size: 16pt;
+    }
+
+    .school-header h3 {
+        margin: 1mm 0 2mm;
+        font-size: 9pt;
+    }
+
+    .school-header h2 {
+        font-size: 13pt;
+    }
+
+    #resultPassport {
+        width: 15mm;
+        height: 15mm;
     }
 
     .result-layout {
-        grid-template-columns: 1fr;
+        display: block;
+        margin: 0 auto;
+    }
+
+    .print-btn,
+    .download-btn,
+    .download-status,
+    .history-panel,
+    .no-print,
+    button,
+    nav,
+    input,
+    select {
+        display: none !important;
     }
 
     .detail-panel {
-        border: none;
+        min-width: 0;
+        max-width: 160mm;
+        margin: 0 auto;
+        border: 1px solid #d1d5db;
+        border-radius: 3mm;
         box-shadow: none;
-        padding: 0;
+        padding: 8mm;
+        background: #fff;
+    }
+
+    .detail-title,
+    .result-date {
+        display: none !important;
+    }
+
+    .info {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 3mm;
+        font-size: 10pt;
+        line-height: 1.35;
+    }
+
+    .info p {
+        padding: 3mm;
+        border-radius: 2mm;
+    }
+
+    .review-section {
+        display: none !important;
     }
 }
 </style>
@@ -381,15 +491,18 @@ body {
             Loading result...
         </div>
 
-        <button class="print-btn" onclick="window.print()">
-            Print Result
-        </button>
+        <div class="result-actions">
+            <button class="print-btn" type="button" onclick="window.print()">Print Result</button>
+            <button class="download-btn" id="downloadResultButton" type="button" onclick="downloadSelectedResultPdf()">Download result (PDF)</button>
+        </div>
+        <p id="downloadStatus" class="download-status" role="status" aria-live="polite"></p>
 
-        <div class="review-section no-print" id="answerReviewSection"></div>
+        <div class="review-section" id="answerReviewSection"></div>
     </main>
 
 </div>
 
+<script src="vendor/jspdf.umd.min.js"></script>
 <script>
 
 const studentName = (localStorage.getItem("studentSearch") || "").trim();
@@ -472,7 +585,7 @@ function renderSelectedResult(student) {
         <p><strong>Candidate:</strong> ${student.candidateName || "N/A"}</p>
         <p><strong>Subject:</strong> ${student.subject || "N/A"}</p>
         <p><strong>Topic:</strong> ${student.topic || "N/A"}</p>
-        <p><strong>Date:</strong> ${student.date || "N/A"}</p>
+        <p class="result-date"><strong>Date:</strong> ${student.date || "N/A"}</p>
         <p><strong>Score:</strong> <span class="score">${student.score || 0}/${student.totalQuestions || 0}</span></p>
         <p><strong>Percentage:</strong> ${student.percentage || 0}%</p>
         <p><strong>Remark:</strong> ${student.remark || "N/A"}</p>
@@ -582,6 +695,183 @@ const savedPassport = localStorage.getItem("candidatePassport");
 
 if (savedPassport && resultPassport) {
     resultPassport.src = savedPassport;
+}
+
+function pdfText(value) {
+    return String(value == null || value === "" ? "N/A" : value)
+        .normalize("NFC")
+        .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim() || "N/A";
+}
+
+function safePdfFilenamePart(value) {
+    const cleaned = pdfText(value)
+        .replace(/\s+/g, "_")
+        .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "")
+        .replace(/[. ]+$/g, "")
+        .replace(/_+/g, "_");
+    return cleaned || "Result";
+}
+
+function getLocalImageData(image, allowDataImage = false) {
+    if (!image || !image.complete || !image.naturalWidth || !image.naturalHeight) return null;
+
+    const source = image.currentSrc || image.src;
+    const isDataImage = /^data:image\/(?:png|jpe?g|webp);base64,/i.test(source);
+    if (!isDataImage || !allowDataImage) {
+        try {
+            if (new URL(source, window.location.href).origin !== window.location.origin) return null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    try {
+        const canvas = document.createElement("canvas");
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        const context = canvas.getContext("2d");
+        if (!context) return null;
+        context.drawImage(image, 0, 0);
+        return canvas.toDataURL("image/jpeg", 0.88);
+    } catch (error) {
+        console.warn("Skipping result photo in PDF:", error);
+        return null;
+    }
+}
+
+function getResultPhotoData() {
+    return getLocalImageData(document.getElementById("resultPassport"), true);
+}
+
+function createResultPdf(student) {
+    const JsPDF = window.jspdf && window.jspdf.jsPDF;
+    if (typeof JsPDF !== "function") {
+        throw new Error("The PDF library is unavailable. Reload the page and try again.");
+    }
+
+    const pdf = new JsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageWidth = 210;
+    const margin = 18;
+    const centerX = pageWidth / 2;
+    const photo = getResultPhotoData();
+    const schoolLogo = getLocalImageData(document.querySelector(".school-logo"));
+    const detailWidth = 174;
+    const detailX = (pageWidth - detailWidth) / 2;
+    const innerPadding = 10;
+    const labelWidth = 37;
+    const photoSpace = photo ? 25 : 0;
+    const valueX = detailX + innerPadding + labelWidth;
+    const valueWidth = detailWidth - innerPadding * 2 - labelWidth - photoSpace;
+    const rows = [
+        ["Candidate", pdfText(student.candidateName)],
+        ["Subject", pdfText(student.subject)],
+        ["Topic", pdfText(student.topic)],
+        ["Score", `${pdfText(student.score)} / ${pdfText(student.totalQuestions)}`],
+        ["Percentage", `${pdfText(student.percentage)}%`],
+        ["Remark", pdfText(student.remark)]
+    ];
+    const contentTop = 72;
+    const contentBottom = 263;
+    let fontSize = 11;
+    let rowLayouts;
+    let detailsHeight;
+
+    do {
+        const lineHeight = fontSize * 0.42;
+        rowLayouts = rows.map(([label, value]) => {
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(fontSize);
+            const lines = pdf.splitTextToSize(value, valueWidth);
+            return {
+                label,
+                lines,
+                lineHeight,
+                rowHeight: Math.max(11, lines.length * lineHeight + 5)
+            };
+        });
+        detailsHeight = 14 + rowLayouts.reduce((height, row) => height + row.rowHeight, 0);
+        if (detailsHeight <= contentBottom - contentTop || fontSize <= 7) break;
+        fontSize -= 1;
+    } while (fontSize >= 7);
+
+    if (detailsHeight > contentBottom - contentTop) {
+        throw new Error("The selected result has too much text to fit on one A4 page.");
+    }
+
+    pdf.setTextColor(31, 41, 55);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(17);
+    if (schoolLogo) {
+        try {
+            pdf.addImage(schoolLogo, "JPEG", centerX - 8, 9, 16, 16, undefined, "FAST");
+        } catch (error) {
+            console.warn("Skipping school logo in PDF:", error);
+        }
+    }
+    pdf.text(pdfText("GraceLight Learning Centre"), centerX, 33, { align: "center", maxWidth: pageWidth - margin * 2 });
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10);
+    pdf.setTextColor(85, 85, 85);
+    pdf.text("Where Wisdom Meets Purpose", centerX, 40, { align: "center" });
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(15);
+    pdf.setTextColor(30, 60, 114);
+    pdf.text("CBT RESULT SLIP", centerX, 55, { align: "center" });
+
+    let boxY = Math.max(contentTop, Math.min(contentBottom - detailsHeight, (contentTop + contentBottom - detailsHeight) / 2));
+    pdf.setDrawColor(148, 163, 184);
+    pdf.setLineWidth(0.6);
+    pdf.roundedRect(detailX, boxY, detailWidth, detailsHeight, 3, 3);
+
+    let rowY = boxY + innerPadding;
+    rowLayouts.forEach(row => {
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(fontSize);
+        pdf.setTextColor(55, 65, 81);
+        pdf.text(`${row.label}:`, detailX + innerPadding, rowY);
+
+        const isRemark = row.label === "Remark";
+        const isPercentage = row.label === "Percentage";
+        pdf.setFont("helvetica", isRemark || isPercentage ? "bold" : "normal");
+        pdf.setFontSize(isPercentage ? fontSize + 2 : fontSize);
+        pdf.setTextColor(isPercentage ? 15 : 31, isPercentage ? 118 : 41, isPercentage ? 110 : 55);
+        pdf.text(row.lines, valueX, rowY, { maxWidth: valueWidth });
+        rowY += row.rowHeight;
+    });
+
+    if (photo) {
+        try {
+            pdf.addImage(photo, "JPEG", detailX + detailWidth - 29, boxY + 7, 20, 20, undefined, "FAST");
+        } catch (error) {
+            console.warn("Skipping result photo in PDF:", error);
+        }
+    }
+
+    const filename = [
+        student.candidateName,
+        student.subject,
+        student.topic
+    ].map(safePdfFilenamePart).join("_") + ".pdf";
+    pdf.save(filename);
+}
+
+function downloadSelectedResultPdf() {
+    const status = document.getElementById("downloadStatus");
+    const selectedResult = studentHistory.find(result => String(result._id) === String(selectedResultId));
+    if (!selectedResult) {
+        status.textContent = "Select a result before downloading.";
+        return;
+    }
+
+    status.textContent = "";
+    try {
+        createResultPdf(selectedResult);
+    } catch (error) {
+        console.error("Unable to create result PDF:", error);
+        status.textContent = error.message || "The PDF could not be created. Please try again.";
+    }
 }
 
 </script>
