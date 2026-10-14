@@ -11,6 +11,11 @@ const IntegrityEventSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
+    attemptId: {
+        type: String,
+        default: undefined,
+        maxlength: 100
+    },
     subject: {
         type: String,
         default: ""

@@ -506,6 +506,7 @@ margin-bottom:10px;
                 <div class="timer-box">
 
                     <div id="timer">60:00</div>
+                    <div id="answerSaveStatus" aria-live="polite" style="font-size:12px;min-height:16px;"></div>
 
                     <button class="calculator-btn" onclick="openCalculator()">
                         Calculator
@@ -644,16 +645,25 @@ document.getElementById("topicName").innerHTML = "Topic: " + selectedTopic;
 let questions = [];
 let currentQuestion = 0;
 let examTerminated = false;
-var answers = JSON.parse(localStorage.getItem("examAnswers")) || [];
+let examFinished = false;
+let answers = {};
 let timer;
 let hiddenAt = null;
 let wakeLock = null;
+let attemptId = localStorage.getItem("examAttemptId") || "";
+let attemptEndsAtMs = 0;
+let serverClockOffsetMs = 0;
+let answerSaveTimeout = null;
+let answerSaveInProgress = false;
+let answerRetryDelayMs = 1500;
+let timerSubmitStarted = false;
+let resultSubmissionStarted = false;
 let examConfig = {
     graceSeconds: 10,
     maxFlagsBeforeAutoSubmit: 0,
     showWarnings: true
 };
-let flagCount = 0;
+let flagCount = Number(localStorage.getItem("examFlagCount") || 0);
 let wakeLockRequested = false;
 
 function getExamConfigDefaults() {
@@ -836,6 +846,9 @@ async function flushQueuedIntegrityEvents() {
                 clientTimestamp: Number(item.clientTimestamp),
                 userAgent: item.userAgent || navigator.userAgent || ""
             };
+            if (typeof item.attemptId === "string") {
+                body.attemptId = item.attemptId;
+            }
             try {
                 const response = await fetch("/integrity-event", {
                     method: "POST",
@@ -864,160 +877,345 @@ async function flushQueuedIntegrityEvents() {
     }
 }
 
-async function loadQuestions(){
+function escapeHTML(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, character => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#39;"
+    }[character]));
+}
 
-    try{
+function getStudentKey() {
+    return String(candidateName || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
 
-        const response = await fetch("/questions");
+function getAttemptCacheKey(id) {
+    return `examAttemptData:${id}`;
+}
 
-        const allQuestions = await response.json();
+function getAnswerQueueKey(id) {
+    return `pendingAttemptAnswers:${id}`;
+}
 
-        if(!Array.isArray(allQuestions)){
-
-            showNoQuestions(
-                "Server did not return valid question data."
-            );
-
-            return;
+function removeStaleAttemptStorage(currentAttemptId) {
+    const attemptStoragePrefixes = [
+        "examAnswers:",
+        "pendingAttemptAnswers:",
+        "examAttemptData:"
+    ];
+    const staleKeys = [];
+    for (let index = 0; index < localStorage.length; index++) {
+        const key = localStorage.key(index);
+        if (key === "examAnswers" || (typeof key === "string" && attemptStoragePrefixes.some(prefix =>
+            key.startsWith(prefix) && key.slice(prefix.length) !== currentAttemptId
+        ))) {
+            staleKeys.push(key);
         }
+    }
+    staleKeys.forEach(key => localStorage.removeItem(key));
+}
 
-        questions = allQuestions.filter(q =>
-    q.subject === selectedSubject &&
-    q.topic === selectedTopic
-);
-
-        if(questions.length === 0){
-
-            showNoQuestions(
-                "No questions available for this topic."
-            );
-
-            return;
-        }
-
-        createPalette();
-
-        loadQuestion();
-
-    } catch(error){
-
+function readPendingAnswerChanges() {
+    if (!attemptId) return {};
+    try {
+        const stored = JSON.parse(localStorage.getItem(getAnswerQueueKey(attemptId)) || "{}");
+        return stored && typeof stored === "object" && !Array.isArray(stored) ? stored : {};
+    } catch (error) {
         console.log(error);
+        return {};
+    }
+}
 
-        showNoQuestions("Unable to load questions.");
+function saveAnswerDraft() {
+    if (attemptId) {
+        localStorage.setItem(`examAnswers:${attemptId}`, JSON.stringify(answers));
+        localStorage.setItem(getAttemptCacheKey(attemptId), JSON.stringify({
+            attemptId,
+            studentKey: getStudentKey(),
+            candidateName,
+            subject: selectedSubject,
+            topic: selectedTopic,
+            endsAt: new Date(attemptEndsAtMs).toISOString(),
+            serverNow: new Date(Date.now() + serverClockOffsetMs).toISOString(),
+            status: "active",
+            questions,
+            answers
+        }));
+    }
+}
 
+function setAnswerSaveStatus(message) {
+    const status = document.getElementById("answerSaveStatus");
+    if (status) status.textContent = message;
+}
+
+function queueAnswerChange(questionId, selected) {
+    if (!attemptId) return;
+    const pending = readPendingAnswerChanges();
+    pending[questionId] = selected;
+    localStorage.setItem(getAnswerQueueKey(attemptId), JSON.stringify(pending));
+    setAnswerSaveStatus("Saving...");
+    if (answerSaveTimeout) clearTimeout(answerSaveTimeout);
+    answerSaveTimeout = setTimeout(() => flushAnswerQueue(), 2000);
+}
+
+async function flushAnswerQueue(keepalive = false) {
+    if (!attemptId) return false;
+    if (answerSaveInProgress) return false;
+    const pending = readPendingAnswerChanges();
+    const entries = Object.entries(pending);
+    if (!entries.length) {
+        setAnswerSaveStatus("Saved");
+        return true;
     }
 
+    answerSaveInProgress = true;
+    setAnswerSaveStatus("Saving...");
+    try {
+        const response = await fetch(`/attempt/${encodeURIComponent(attemptId)}/answers`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ answers: pending }),
+            keepalive: keepalive
+        });
+        if (response.status === 409) {
+            localStorage.removeItem(getAnswerQueueKey(attemptId));
+            setAnswerSaveStatus("Deadline passed; saved answers will be submitted.");
+            return true;
+        }
+        if (!response.ok) {
+            throw new Error(`Answer save failed with status ${response.status}`);
+        }
+        const currentPending = readPendingAnswerChanges();
+        entries.forEach(([questionId, selected]) => {
+            if (currentPending[questionId] === selected) delete currentPending[questionId];
+        });
+        if (Object.keys(currentPending).length) {
+            localStorage.setItem(getAnswerQueueKey(attemptId), JSON.stringify(currentPending));
+            setAnswerSaveStatus("Saving...");
+            answerRetryDelayMs = 1000;
+            setTimeout(() => flushAnswerQueue(), 500);
+        } else {
+            localStorage.removeItem(getAnswerQueueKey(attemptId));
+            setAnswerSaveStatus("Saved");
+            answerRetryDelayMs = 1000;
+        }
+        saveAnswerDraft();
+        return Object.keys(currentPending).length === 0;
+    } catch (error) {
+        console.log(error);
+        setAnswerSaveStatus("Offline, will retry");
+        answerRetryDelayMs = Math.min(answerRetryDelayMs * 2, 60000);
+        setTimeout(() => flushAnswerQueue(), answerRetryDelayMs);
+        return false;
+    } finally {
+        answerSaveInProgress = false;
+    }
+}
+
+function cacheAttemptData(data) {
+    localStorage.setItem(getAttemptCacheKey(data.attemptId), JSON.stringify(data));
+}
+
+function applyAttemptData(data, offline = false) {
+    if (!data || !data.attemptId || !Array.isArray(data.questions)) {
+        throw new Error("The server returned an invalid exam attempt");
+    }
+    removeStaleAttemptStorage(data.attemptId);
+    attemptId = data.attemptId;
+    localStorage.setItem("examAttemptId", attemptId);
+    questions = data.questions.filter(question => question && question.questionId && question.options && !Object.prototype.hasOwnProperty.call(question, "answer"));
+    attemptEndsAtMs = Date.parse(data.endsAt);
+    const serverNowMs = Date.parse(data.serverNow);
+    if (offline) {
+        serverClockOffsetMs = 0;
+    } else if (Number.isFinite(serverNowMs)) {
+        serverClockOffsetMs = serverNowMs - Date.now();
+    }
+    if (!Number.isFinite(attemptEndsAtMs)) throw new Error("The exam attempt has an invalid deadline");
+
+    const validIds = new Set(questions.map(question => question.questionId));
+    answers = {};
+    Object.entries(data.answers || {}).forEach(([questionId, selected]) => {
+        if (validIds.has(questionId) && ["A", "B", "C", "D"].includes(selected)) {
+            answers[questionId] = selected;
+        }
+    });
+    const pendingChanges = readPendingAnswerChanges();
+    const validPendingChanges = {};
+    Object.entries(pendingChanges).forEach(([questionId, selected]) => {
+        if (validIds.has(questionId) && ["A", "B", "C", "D"].includes(selected)) {
+            validPendingChanges[questionId] = selected;
+            answers[questionId] = selected;
+        }
+    });
+    if (attemptId) {
+        const pendingKey = getAnswerQueueKey(attemptId);
+        if (Object.keys(validPendingChanges).length) {
+            localStorage.setItem(pendingKey, JSON.stringify(validPendingChanges));
+        } else {
+            localStorage.removeItem(pendingKey);
+        }
+    }
+    saveAnswerDraft();
+    if (!offline) cacheAttemptData({ ...data, answers });
+    if (data.status !== "active") {
+        renderAttemptResult(data.result, data.status);
+        return;
+    }
+    if (!questions.length) throw new Error("No questions are available for this exam attempt");
+    createPalette();
+    loadQuestion();
+    startTimer();
+    if (Object.keys(readPendingAnswerChanges()).length) flushAnswerQueue();
+    setAnswerSaveStatus(offline ? "Offline, will retry" : "Saved");
+}
+
+function showAttemptError(message) {
+    const section = document.getElementById("examSection");
+    section.innerHTML = `<div class="no-question"><h1>Exam unavailable</h1><p>${escapeHTML(message)}</p><p><a href="select-subject.html">Go back to exam selection</a></p><button type="button" onclick="startOrResumeAttempt()">Retry</button></div>`;
+    document.querySelector(".navigation").style.display = "none";
+    const palette = document.querySelector(".palette-box");
+    if (palette) palette.style.display = "none";
+}
+
+async function startOrResumeAttempt() {
+    document.querySelector(".navigation").style.display = "flex";
+    const cachedAttemptId = localStorage.getItem("examAttemptId") || "";
+    const clearCachedAttemptId = () => {
+        localStorage.removeItem("examAttemptId");
+    };
+    const matchesCurrentExam = data =>
+        data &&
+        data.studentKey === getStudentKey() &&
+        data.subject === selectedSubject &&
+        data.topic === selectedTopic;
+    let allowOfflineCache = Boolean(cachedAttemptId);
+
+    if (cachedAttemptId) {
+        try {
+            const response = await fetch(`/attempt/${encodeURIComponent(cachedAttemptId)}`);
+            if (response.ok) {
+                const cachedAttempt = await response.json();
+                if (cachedAttempt.attemptId === cachedAttemptId &&
+                    matchesCurrentExam(cachedAttempt) &&
+                    cachedAttempt.status === "active") {
+                    applyAttemptData(cachedAttempt);
+                    return;
+                }
+                clearCachedAttemptId();
+                allowOfflineCache = false;
+            } else if (response.status === 404 || response.status < 500) {
+                clearCachedAttemptId();
+                allowOfflineCache = false;
+            }
+        } catch (error) {
+            console.log(error);
+        }
+    }
+
+    try {
+        const response = await fetch("/attempt/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                studentKey: getStudentKey(),
+                candidateName,
+                subject: selectedSubject,
+                topic: selectedTopic
+            })
+        });
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({}));
+            throw new Error(errorBody.message || `Unable to start exam (HTTP ${response.status})`);
+        }
+        const data = await response.json();
+        if (!matchesCurrentExam(data) || data.status !== "active") {
+            throw new Error("The server returned an invalid exam attempt");
+        }
+        applyAttemptData(data);
+    } catch (startError) {
+        console.log(startError);
+        if (allowOfflineCache) {
+            try {
+                const cached = JSON.parse(localStorage.getItem(getAttemptCacheKey(cachedAttemptId)) || "null");
+                if (cached &&
+                    cached.attemptId === cachedAttemptId &&
+                    cached.status === "active" &&
+                    matchesCurrentExam(cached)) {
+                    applyAttemptData(cached, true);
+                    showIntegrityBanner("Offline: answers will sync when your connection returns. The server still controls the deadline.");
+                    return;
+                }
+            } catch (cacheError) {
+                console.log(cacheError);
+            }
+        }
+        showAttemptError(startError.message || "Unable to start this exam. Check your connection and retry.");
+    }
+}
+
+function renderAttemptResult(result, status) {
+    if (!result) {
+        showAttemptError("This attempt is finalized, but its result could not be loaded. Contact your teacher.");
+        return;
+    }
+    examFinished = true;
+    resultSubmissionStarted = true;
+    clearInterval(timer);
+    releaseWakeLock();
+    localStorage.removeItem("examAnswers");
+    localStorage.removeItem(`examAnswers:${attemptId}`);
+    localStorage.removeItem("examTime");
+    localStorage.removeItem("examAttemptId");
+    localStorage.removeItem(getAttemptCacheKey(attemptId));
+    localStorage.removeItem(getAnswerQueueKey(attemptId));
+    localStorage.removeItem("examAuthorized");
+    const review = Array.isArray(result.answersReview) ? result.answersReview : [];
+    const section = document.getElementById("examSection");
+    section.innerHTML = `<div class="result-box"><h1>${status === "expired" ? "Exam time ended" : "Exam submitted"}</h1><h2>${Number(result.score || 0)} / ${Number(result.totalQuestions || 0)}</h2><p>${Number(result.percentage || 0)}% - ${escapeHTML(result.remark || "")}</p><p>Your result has been saved.</p></div>${review.map(item => `<article class="question-box"><strong>Question ${Number(item.questionNumber || 0)}: ${escapeHTML(item.question || "")}</strong><p>Your answer: ${escapeHTML(item.selected || "Not answered")}</p><p>Correct answer: ${escapeHTML(item.correctAnswer || "")}</p><p>${item.isCorrect ? "Correct" : "Incorrect"}</p></article>`).join("")}<button type="button" onclick="window.location.href='index.html'">Return to home</button>`;
+    document.querySelector(".navigation").style.display = "none";
+    const palette = document.querySelector(".palette-box");
+    if (palette) palette.style.display = "none";
+    document.getElementById("instructions").style.display = "none";
+    document.getElementById("timer").style.display = "none";
+    document.getElementById("answerSaveStatus").textContent = "";
 }
 
 function showNoQuestions(message){
-
-    document.getElementById("examSection").innerHTML = `
-
-        <div class="no-question">
-
-            <h1>No Questions Found</h1>
-
-            <p>${message}</p>
-
-        </div>
-
-    `;
-
+    const section = document.getElementById("examSection");
+    section.innerHTML = `<div class="no-question"><h1>No Questions Found</h1><p>${escapeHTML(message)}</p><p><a href="select-subject.html">Go back to exam selection</a></p></div>`;
 }
 
 function loadQuestion(){
-
     const q = questions[currentQuestion];
-
-    const savedAnswer = answers[currentQuestion] || "";
-
+    if (!q) return;
+    const savedAnswer = answers[q.questionId] || "";
+    const options = q.options || {};
     document.getElementById("examSection").innerHTML = `
-
-        <div class="question-number">
-            Question ${currentQuestion + 1}
-        </div>
-
-        <div class="question-text">
-    ${q.question}
-</div>
-
-${q.image ? `
-<div class="question-image">
-    <img src="${q.image}"
-         alt="Question Image"
-         style="max-width:100%;
-                height:auto;
-                margin-top:15px;
-                border-radius:8px;" />
-</div>
-` : ""}
-
-        <div class="option">
-            <label>
-                <input type="radio"
-                name="option"
-                value="A"
-                ${savedAnswer === "A" ? "checked" : ""}
-                onchange="saveAnswer('A')">
-
-                A. ${q.optionA}
-            </label>
-        </div>
-
-        <div class="option">
-            <label>
-                <input type="radio"
-                name="option"
-                value="B"
-                ${savedAnswer === "B" ? "checked" : ""}
-                onchange="saveAnswer('B')">
-
-                B. ${q.optionB}
-            </label>
-        </div>
-
-        <div class="option">
-            <label>
-                <input type="radio"
-                name="option"
-                value="C"
-                ${savedAnswer === "C" ? "checked" : ""}
-                onchange="saveAnswer('C')">
-
-                C. ${q.optionC}
-            </label>
-        </div>
-
-        <div class="option">
-            <label>
-                <input type="radio"
-                name="option"
-                value="D"
-                ${savedAnswer === "D" ? "checked" : ""}
-                onchange="saveAnswer('D')">
-
-                D. ${q.optionD}
-            </label>
-        </div>
-
+        <div class="question-number">Question ${currentQuestion + 1}</div>
+        <div class="question-text">${escapeHTML(q.question)}</div>
+        ${q.image ? `<div class="question-image"><img src="${escapeHTML(q.image)}" alt="Question Image" style="max-width:100%;height:auto;margin-top:15px;border-radius:8px;" /></div>` : ""}
+        ${["A", "B", "C", "D"].map(label => `
+            <div class="option"><label>
+                <input type="radio" name="option" value="${label}" ${savedAnswer === label ? "checked" : ""} onchange="saveAnswer('${label}')">
+                ${label}. ${escapeHTML(options[label] || "")}
+            </label></div>
+        `).join("")}
     `;
-
     updatePalette();
-
 }
 
 function saveAnswer(answer){
-
-    answers[currentQuestion] = answer;
-
-    localStorage.setItem(
-        "examAnswers",
-        JSON.stringify(answers)
-    );
-
+    const question = questions[currentQuestion];
+    if (!question || !["A", "B", "C", "D"].includes(answer)) return;
+    answers[question.questionId] = answer;
+    saveAnswerDraft();
+    queueAnswerChange(question.questionId, answer);
     requestWakeLock();
     updatePalette();
-
 }
 
 function nextQuestion(){
@@ -1088,7 +1286,7 @@ function updatePalette(){
 
         }
 
-        if(answers[index]){
+        if(answers[questions[index] && questions[index].questionId]){
 
             btn.classList.add("answered");
 
@@ -1109,8 +1307,6 @@ function cancelSubmitConfirmation(){
     if (panel) panel.style.display = "none";
 }
 
-let resultSubmissionStarted = false;
-
 function showSubmitRetryMessage() {
     const banner = document.getElementById("integrityBanner");
     if (!banner) return;
@@ -1130,15 +1326,12 @@ function showSubmitRetryMessage() {
 }
 
 async function submitExam(forceSubmit = false){
-
+    const panel = document.getElementById("submitConfirmation");
     if (forceSubmit) {
-        const panel = document.getElementById("submitConfirmation");
         if (panel) panel.style.display = "none";
         if (resultSubmissionStarted) return;
-    }
-
-    if (!forceSubmit) {
-        const panel = document.getElementById("submitConfirmation");
+    } else {
+        if (examFinished) return;
         if (panel) {
             panel.style.display = "block";
             panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -1146,292 +1339,105 @@ async function submitExam(forceSubmit = false){
         return;
     }
 
-    examFinished = true;
-    releaseWakeLock();
-
-if(timer){
-    clearInterval(timer);
-    timer = null;
-}
-
-    if(questions.length === 0){
-
+    if (!questions.length) {
         showIntegrityBanner("No exam questions are available.");
         return;
-
     }
 
-    let score = 0;
+    resultSubmissionStarted = true;
+    examFinished = true;
+    releaseWakeLock();
+    if (timer) {
+        clearInterval(timer);
+        timer = null;
+    }
 
-    // Reuses the same comparison as scoring above; only records detail for review display.
-    let answersReview = [];
-
-    questions.forEach((q,index)=>{
-
-        const isCorrect = answers[index] === q.answer;
-
-        if(isCorrect){
-
-            score++;
-
+    try {
+        if (Object.keys(readPendingAnswerChanges()).length && !(await flushAnswerQueue())) {
+            throw new Error("Answer changes are still waiting for a connection");
         }
-
-        answersReview.push({
-
-            questionNumber: index + 1,
-
-            question: q.question,
-
-            image: q.image || "",
-
-            options: {
-
-                A: q.optionA,
-
-                B: q.optionB,
-
-                C: q.optionC,
-
-                D: q.optionD
-
-            },
-
-            selected: answers[index] || "",
-
-            correctAnswer: q.answer,
-
-            isCorrect: isCorrect
-
+        const response = await fetch(`/attempt/${encodeURIComponent(attemptId)}/submit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({})
         });
-
-    });
-
-let percentage =
-Math.round((score / questions.length) * 100);
-
-let remark = "";
-
-if(percentage >= 80){
-
-    remark = "Excellent";
-
-}
-else if(percentage >= 50){
-
-    remark = "Pass";
-
-}
-else{
-
-    remark = "Fail";
-
-}
-
-const resultData = {
-
-candidateName: candidateName,
-studentKey: (candidateName || "").trim().toLowerCase(),
-
-subject: selectedSubject,
-
-topic: selectedTopic,
-
-score: score,
-
-totalQuestions: questions.length,
-
-percentage: percentage,
-
-remark: remark,
-
-date: new Date().toLocaleString(),
-
-answersReview: answersReview
-
-};
-  
-let saveResultResponse;
-resultSubmissionStarted = true;
-try {
-    saveResultResponse = await fetch("/save-result", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(resultData)
-    });
-    if (!saveResultResponse.ok) {
-        throw new Error(`Exam submission failed with status ${saveResultResponse.status}`);
+        const data = await response.json();
+        if (!response.ok || data.success !== true) {
+            throw new Error(data.message || `Exam submission failed with status ${response.status}`);
+        }
+        renderAttemptResult({
+            _id: data.resultId,
+            score: data.score,
+            totalQuestions: data.total,
+            percentage: data.percentage,
+            remark: data.remark,
+            answersReview: data.review
+        }, data.status || "submitted");
+    } catch (error) {
+        console.log(error);
+        resultSubmissionStarted = false;
+        examFinished = false;
+        if (!timerSubmitStarted && attemptEndsAtMs > Date.now() + serverClockOffsetMs) {
+            startTimer();
+            requestWakeLock();
+        }
+        showSubmitRetryMessage();
     }
-    const saveResultBody = await saveResultResponse.json();
-    if (saveResultBody.success !== true) {
-        throw new Error("Exam submission was rejected by the server");
-    }
-} catch (error) {
-    console.log(error);
-    resultSubmissionStarted = false;
-    showSubmitRetryMessage();
-    return;
-}
-
-document.getElementById("examSection").innerHTML = `
-    <div style="text-align:center; padding:60px;">
-        <h1 style="color:green;">
-            Exam Submitted Successfully
-        </h1>
-
-        <p style="font-size:20px;">
-            Logging out...
-        </p>
-    </div>
-`;
-
-clearInterval(timer);
-
-const timerEl = document.getElementById("timer");
-if(timerEl) timerEl.style.display = "none";
-
-const calcBtn = document.getElementById("calculatorBtn");
-if(calcBtn) calcBtn.style.display = "none";
-
-const prevBtn = document.getElementById("prevBtn");
-if(prevBtn) prevBtn.style.display = "none";
-
-const nextBtn = document.getElementById("nextBtn");
-if(nextBtn) nextBtn.style.display = "none";
-
-const submitBtn = document.getElementById("submitBtn");
-if(submitBtn) submitBtn.style.display = "none";
-
-const instructions = document.getElementById("instructions");
-if(instructions) instructions.style.display = "none";
-
-const palette = document.getElementById("paletteSection");
-if(palette) palette.style.display = "none";
-    
-if (timer) {
-    clearInterval(timer);
-    timer = null;
-}
-    
-localStorage.removeItem("examTime");
-localStorage.removeItem("examAnswers");
-localStorage.removeItem("exitCount");
-localStorage.removeItem("examAuthorized");
-sessionStorage.removeItem("pageReloaded");
-
-const configuredDuration = Number(localStorage.getItem("examDurationMinutes") || 30);
-time = configuredDuration * 60;
-
-examFinished = true;
-    
-setTimeout(() => {
-    window.location.href = "index.html";
-}, 3000);
-
-}
-
-const configuredDurationMinutes = Number(localStorage.getItem("examDurationMinutes") || 30);
-
-if (localStorage.getItem("examTime") && Number(localStorage.getItem("examTime")) !== configuredDurationMinutes * 60) {
-    localStorage.removeItem("examTime");
-}
-
-let time = localStorage.getItem("examTime")
-    ? parseInt(localStorage.getItem("examTime"))
-    : configuredDurationMinutes * 60;
-
-function startTimer(){
-
-    timer = setInterval(function(){
-
-        let minutes = Math.floor(time / 60);
-
-        let seconds = time % 60;
-
-        minutes =
-        minutes < 10 ? "0" + minutes : minutes;
-
-        seconds =
-        seconds < 10 ? "0" + seconds : seconds;
-
-        document.getElementById("timer").innerHTML =
-        minutes + ":" + seconds;
-
-        time--;
-
-localStorage.setItem("examTime", time);
-
-        if(time <= 0){
-
-    clearInterval(timer);
-
-    localStorage.removeItem("examTime");
-
-submitExam(true);
-
-    return;
-}
-
-    },1000);
-
 }
 
 function openCalculator(){
-
-    document.getElementById(
-        "calculatorModal"
-    ).style.display = "block";
-
+    document.getElementById("calculatorModal").style.display = "block";
 }
 
 function closeCalculator(){
-
-    document.getElementById(
-        "calculatorModal"
-    ).style.display = "none";
-
+    document.getElementById("calculatorModal").style.display = "none";
 }
 
 function pressCalc(value){
-
     document.getElementById("calcScreen").value += value;
-
 }
 
 function clearCalc(){
-
     document.getElementById("calcScreen").value = "";
-
 }
 
 function calculate(){
-
     try{
-
-        document.getElementById("calcScreen").value =
-        eval(document.getElementById("calcScreen").value);
-
+        document.getElementById("calcScreen").value = eval(document.getElementById("calcScreen").value);
     }catch{
-
         showIntegrityBanner("Invalid calculation.");
-
     }
-
 }
-    
-let examFinished = false;
 
 localStorage.removeItem("exitCount");
-flagCount = 0;
+
+function startTimer(){
+    if (timer) clearInterval(timer);
+    const updateTimer = () => {
+        if (!attemptEndsAtMs || examFinished) return;
+        const remainingSeconds = Math.max(0, Math.ceil((attemptEndsAtMs - (Date.now() + serverClockOffsetMs)) / 1000));
+        const minutes = String(Math.floor(remainingSeconds / 60)).padStart(2, "0");
+        const seconds = String(remainingSeconds % 60).padStart(2, "0");
+        document.getElementById("timer").textContent = `${minutes}:${seconds}`;
+        if (remainingSeconds === 0 && !timerSubmitStarted) {
+            timerSubmitStarted = true;
+            clearInterval(timer);
+            timer = null;
+            submitExam(true);
+        }
+    };
+    updateTimer();
+    timer = setInterval(updateTimer, 1000);
+}
 
 function postIntegrityEvent(hiddenSeconds) {
     const payload = {
-        studentKey: (candidateName || "").trim().toLowerCase(),
+        studentKey: getStudentKey(),
         candidateName: candidateName || "",
         subject: selectedSubject || "",
         topic: selectedTopic || "",
         type: "hidden_return",
+        attemptId: attemptId || undefined,
         hiddenSeconds: Number(hiddenSeconds) || 0,
         clientTimestamp: Date.now(),
         userAgent: navigator.userAgent || ""
@@ -1487,16 +1493,23 @@ document.addEventListener("visibilitychange", function () {
 });
 
 if (!examTerminated) {
-    const storedDuration = Number(localStorage.getItem("examDurationMinutes") || 30);
-    if (!localStorage.getItem("examTime")) {
-        time = storedDuration * 60;
-    }
     loadExamConfig();
-    loadQuestions();
-    startTimer();
+    startOrResumeAttempt();
     flushQueuedIntegrityEvents();
-    requestWakeLock();
 }
+
+document.addEventListener("visibilitychange", () => {
+    if (examFinished) return;
+    if (document.hidden) {
+        flushAnswerQueue(true);
+    } else {
+        requestWakeLock();
+        flushAnswerQueue();
+    }
+});
+
+window.addEventListener("pagehide", () => flushAnswerQueue(true));
+window.addEventListener("online", () => flushAnswerQueue());
 
 </script>
 
