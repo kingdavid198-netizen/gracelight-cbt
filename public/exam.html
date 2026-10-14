@@ -275,6 +275,51 @@ body{
     margin-bottom:15px;
 }
 
+.result-actions{
+    display:flex;
+    justify-content:center;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-top:20px;
+}
+
+.result-actions a{
+    display:inline-block;
+    padding:12px 18px;
+    border-radius:6px;
+    background:#2563eb;
+    color:white;
+    text-decoration:none;
+}
+
+.result-actions a:last-child{
+    background:#6b7280;
+}
+
+body.exam-submitted .header,
+body.exam-submitted .info-box,
+body.exam-submitted .right-section,
+body.exam-submitted .navigation,
+body.exam-submitted #integrityBanner,
+body.exam-submitted #submitConfirmation,
+body.exam-submitted .calculator-modal{
+    display:none !important;
+}
+
+body.exam-submitted .exam-container{
+    display:block;
+    min-height:0;
+}
+
+body.exam-submitted .left-section{
+    display:block;
+}
+
+body.exam-submitted #examSection{
+    min-height:0;
+    overflow:visible;
+}
+
 .no-question{
     text-align:center;
     padding:60px 20px;
@@ -420,7 +465,7 @@ height:45px;
 font-size:16px;
 margin:5px;
 }
-    
+
 .instructions h2{
 font-size:10px;
 margin-bottom:0px;
@@ -435,7 +480,7 @@ margin-bottom:0px;
 .palette-container h2{
 font-size:10px;
 margin-bottom:0px;
-}    
+}
 
 }
 
@@ -446,10 +491,68 @@ margin-bottom:0px;
 <body>
 
 <script>
-if(localStorage.getItem("examAuthorized") !== "true"){
+const examResumeKeys = ["examAuthorized", "candidateName", "subject", "topic"];
+const examResumeStorageKey = key => `examResume:${key}`;
+sessionStorage.removeItem("examResume:candidatePassport");
+const examAuthorized = localStorage.getItem("examAuthorized");
+let examResultConfirmationOnLoad = null;
+
+try {
+    const savedConfirmation = JSON.parse(sessionStorage.getItem("examResultConfirmation") || "null");
+    if (savedConfirmation && ["submitted", "expired"].includes(savedConfirmation.status)) {
+        if (examAuthorized === "true") {
+            sessionStorage.removeItem("examResultConfirmation");
+        } else if (examAuthorized === null) {
+            const currentIdentity = {
+                candidateName: localStorage.getItem("candidateName"),
+                subject: localStorage.getItem("subject"),
+                topic: localStorage.getItem("topic")
+            };
+            const hasDifferentIdentity = Object.entries(currentIdentity).some(([key, value]) =>
+                value !== null && value !== savedConfirmation[key]
+            );
+            if (!hasDifferentIdentity) {
+                Object.entries(currentIdentity).forEach(([key, value]) => {
+                    if (value === null && savedConfirmation[key]) {
+                        localStorage.setItem(key, savedConfirmation[key]);
+                    }
+                });
+                examResultConfirmationOnLoad = savedConfirmation;
+            } else {
+                sessionStorage.removeItem("examResultConfirmation");
+            }
+        } else {
+            sessionStorage.removeItem("examResultConfirmation");
+        }
+    } else if (sessionStorage.getItem("examResultConfirmation")) {
+        sessionStorage.removeItem("examResultConfirmation");
+    }
+} catch (error) {
+    console.error("Unable to restore the exam confirmation:", error);
+    sessionStorage.removeItem("examResultConfirmation");
+}
+
+if (examAuthorized === "true") {
+    examResumeKeys.forEach(key => {
+        const value = localStorage.getItem(key);
+        if (value !== null) {
+            sessionStorage.setItem(examResumeStorageKey(key), value);
+        } else {
+            const resumeValue = sessionStorage.getItem(examResumeStorageKey(key));
+            if (resumeValue !== null) localStorage.setItem(key, resumeValue);
+        }
+    });
+} else if (examAuthorized === null && sessionStorage.getItem(examResumeStorageKey("examAuthorized")) === "true") {
+    examResumeKeys.forEach(key => {
+        const resumeValue = sessionStorage.getItem(examResumeStorageKey(key));
+        if (resumeValue !== null) localStorage.setItem(key, resumeValue);
+    });
+}
+
+if(localStorage.getItem("examAuthorized") !== "true" && !examResultConfirmationOnLoad){
     window.location.href = "login.html";
 }
-</script>    
+</script>
 
 <div class="header">
     GraceLight CBT Examination
@@ -654,7 +757,7 @@ let attemptId = localStorage.getItem("examAttemptId") || "";
 let attemptEndsAtMs = 0;
 let serverClockOffsetMs = 0;
 let answerSaveTimeout = null;
-let answerSaveInProgress = false;
+let answerSavePromise = null;
 let answerRetryDelayMs = 1500;
 let timerSubmitStarted = false;
 let resultSubmissionStarted = false;
@@ -963,7 +1066,7 @@ function queueAnswerChange(questionId, selected) {
 
 async function flushAnswerQueue(keepalive = false) {
     if (!attemptId) return false;
-    if (answerSaveInProgress) return false;
+    if (answerSavePromise) return answerSavePromise;
     const pending = readPendingAnswerChanges();
     const entries = Object.entries(pending);
     if (!entries.length) {
@@ -971,48 +1074,50 @@ async function flushAnswerQueue(keepalive = false) {
         return true;
     }
 
-    answerSaveInProgress = true;
     setAnswerSaveStatus("Saving...");
-    try {
-        const response = await fetch(`/attempt/${encodeURIComponent(attemptId)}/answers`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ answers: pending }),
-            keepalive: keepalive
-        });
-        if (response.status === 409) {
-            localStorage.removeItem(getAnswerQueueKey(attemptId));
-            setAnswerSaveStatus("Deadline passed; saved answers will be submitted.");
-            return true;
+    answerSavePromise = (async () => {
+        try {
+            const response = await fetch(`/attempt/${encodeURIComponent(attemptId)}/answers`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ answers: pending }),
+                keepalive: keepalive
+            });
+            if (response.status === 409) {
+                localStorage.removeItem(getAnswerQueueKey(attemptId));
+                setAnswerSaveStatus("Deadline passed; saved answers will be submitted.");
+                return true;
+            }
+            if (!response.ok) {
+                throw new Error(`Answer save failed with status ${response.status}`);
+            }
+            const currentPending = readPendingAnswerChanges();
+            entries.forEach(([questionId, selected]) => {
+                if (currentPending[questionId] === selected) delete currentPending[questionId];
+            });
+            if (Object.keys(currentPending).length) {
+                localStorage.setItem(getAnswerQueueKey(attemptId), JSON.stringify(currentPending));
+                setAnswerSaveStatus("Saving...");
+                answerRetryDelayMs = 1000;
+                setTimeout(() => flushAnswerQueue(), 500);
+            } else {
+                localStorage.removeItem(getAnswerQueueKey(attemptId));
+                setAnswerSaveStatus("Saved");
+                answerRetryDelayMs = 1000;
+            }
+            saveAnswerDraft();
+            return Object.keys(currentPending).length === 0;
+        } catch (error) {
+            console.error("Answer save failed:", error);
+            setAnswerSaveStatus("Offline, will retry");
+            answerRetryDelayMs = Math.min(answerRetryDelayMs * 2, 60000);
+            setTimeout(() => flushAnswerQueue(), answerRetryDelayMs);
+            return false;
+        } finally {
+            answerSavePromise = null;
         }
-        if (!response.ok) {
-            throw new Error(`Answer save failed with status ${response.status}`);
-        }
-        const currentPending = readPendingAnswerChanges();
-        entries.forEach(([questionId, selected]) => {
-            if (currentPending[questionId] === selected) delete currentPending[questionId];
-        });
-        if (Object.keys(currentPending).length) {
-            localStorage.setItem(getAnswerQueueKey(attemptId), JSON.stringify(currentPending));
-            setAnswerSaveStatus("Saving...");
-            answerRetryDelayMs = 1000;
-            setTimeout(() => flushAnswerQueue(), 500);
-        } else {
-            localStorage.removeItem(getAnswerQueueKey(attemptId));
-            setAnswerSaveStatus("Saved");
-            answerRetryDelayMs = 1000;
-        }
-        saveAnswerDraft();
-        return Object.keys(currentPending).length === 0;
-    } catch (error) {
-        console.log(error);
-        setAnswerSaveStatus("Offline, will retry");
-        answerRetryDelayMs = Math.min(answerRetryDelayMs * 2, 60000);
-        setTimeout(() => flushAnswerQueue(), answerRetryDelayMs);
-        return false;
-    } finally {
-        answerSaveInProgress = false;
-    }
+    })();
+    return answerSavePromise;
 }
 
 function cacheAttemptData(data) {
@@ -1062,7 +1167,7 @@ function applyAttemptData(data, offline = false) {
     saveAnswerDraft();
     if (!offline) cacheAttemptData({ ...data, answers });
     if (data.status !== "active") {
-        renderAttemptResult(data.result, data.status);
+        renderAttemptResult(data.status);
         return;
     }
     if (!questions.length) throw new Error("No questions are available for this exam attempt");
@@ -1084,37 +1189,92 @@ function showAttemptError(message) {
 async function startOrResumeAttempt() {
     document.querySelector(".navigation").style.display = "flex";
     const cachedAttemptId = localStorage.getItem("examAttemptId") || "";
-    const clearCachedAttemptId = () => {
-        localStorage.removeItem("examAttemptId");
-    };
     const matchesCurrentExam = data =>
         data &&
         data.studentKey === getStudentKey() &&
         data.subject === selectedSubject &&
         data.topic === selectedTopic;
-    let allowOfflineCache = Boolean(cachedAttemptId);
+    let shouldStartAttempt = !cachedAttemptId;
 
     if (cachedAttemptId) {
+        let response;
         try {
-            const response = await fetch(`/attempt/${encodeURIComponent(cachedAttemptId)}`);
-            if (response.ok) {
-                const cachedAttempt = await response.json();
-                if (cachedAttempt.attemptId === cachedAttemptId &&
-                    matchesCurrentExam(cachedAttempt) &&
-                    cachedAttempt.status === "active") {
-                    applyAttemptData(cachedAttempt);
+            response = await fetch(`/attempt/${encodeURIComponent(cachedAttemptId)}`);
+        } catch (error) {
+            console.error("Unable to resume cached exam attempt:", error);
+            try {
+                const cached = JSON.parse(localStorage.getItem(getAttemptCacheKey(cachedAttemptId)) || "null");
+                if (cached &&
+                    cached.attemptId === cachedAttemptId &&
+                    cached.status === "active" &&
+                    matchesCurrentExam(cached)) {
+                    applyAttemptData(cached, true);
+                    showIntegrityBanner("Offline: answers will sync when your connection returns. The server still controls the deadline.");
                     return;
                 }
-                clearCachedAttemptId();
-                allowOfflineCache = false;
-            } else if (response.status === 404 || response.status < 500) {
-                clearCachedAttemptId();
-                allowOfflineCache = false;
+            } catch (cacheError) {
+                console.error("Unable to load cached exam attempt:", cacheError);
             }
-        } catch (error) {
-            console.log(error);
+            showAttemptError("Unable to check this exam attempt. Check your connection and retry.");
+            return;
+        }
+
+        if (response.status === 404) {
+            localStorage.removeItem("examAttemptId");
+            shouldStartAttempt = true;
+        } else if (!response.ok) {
+            const message = `Unable to load this exam attempt (HTTP ${response.status})`;
+            if (response.status >= 500) {
+                try {
+                    const cached = JSON.parse(localStorage.getItem(getAttemptCacheKey(cachedAttemptId)) || "null");
+                    if (cached &&
+                        cached.attemptId === cachedAttemptId &&
+                        cached.status === "active" &&
+                        matchesCurrentExam(cached)) {
+                        applyAttemptData(cached, true);
+                        showIntegrityBanner("Offline: answers will sync when your connection returns. The server still controls the deadline.");
+                        return;
+                    }
+                } catch (cacheError) {
+                    console.error("Unable to load cached exam attempt:", cacheError);
+                }
+            }
+            showAttemptError(message);
+            return;
+        } else {
+            let cachedAttempt;
+            try {
+                cachedAttempt = await response.json();
+            } catch (error) {
+                console.error("Unable to read cached exam attempt response:", error);
+                showAttemptError("The server returned an invalid exam attempt.");
+                return;
+            }
+
+            if (!cachedAttempt || typeof cachedAttempt !== "object" || !cachedAttempt.attemptId) {
+                showAttemptError("The server returned an invalid exam attempt.");
+                return;
+            }
+
+            if (!matchesCurrentExam(cachedAttempt)) {
+                localStorage.removeItem("examAttemptId");
+                shouldStartAttempt = true;
+            } else if (cachedAttempt.attemptId !== cachedAttemptId) {
+                showAttemptError("The server returned an invalid exam attempt.");
+                return;
+            } else {
+                attemptId = cachedAttemptId;
+                if (cachedAttempt.status === "active") {
+                    applyAttemptData(cachedAttempt);
+                } else {
+                    renderAttemptResult(cachedAttempt.status);
+                }
+                return;
+            }
         }
     }
+
+    if (!shouldStartAttempt) return;
 
     try {
         const response = await fetch("/attempt/start", {
@@ -1132,36 +1292,24 @@ async function startOrResumeAttempt() {
             throw new Error(errorBody.message || `Unable to start exam (HTTP ${response.status})`);
         }
         const data = await response.json();
-        if (!matchesCurrentExam(data) || data.status !== "active") {
+        if (!data || !data.attemptId || !matchesCurrentExam(data)) {
             throw new Error("The server returned an invalid exam attempt");
+        }
+        attemptId = data.attemptId;
+        if (data.status !== "active") {
+            renderAttemptResult(data.status);
+            return;
         }
         applyAttemptData(data);
     } catch (startError) {
-        console.log(startError);
-        if (allowOfflineCache) {
-            try {
-                const cached = JSON.parse(localStorage.getItem(getAttemptCacheKey(cachedAttemptId)) || "null");
-                if (cached &&
-                    cached.attemptId === cachedAttemptId &&
-                    cached.status === "active" &&
-                    matchesCurrentExam(cached)) {
-                    applyAttemptData(cached, true);
-                    showIntegrityBanner("Offline: answers will sync when your connection returns. The server still controls the deadline.");
-                    return;
-                }
-            } catch (cacheError) {
-                console.log(cacheError);
-            }
-        }
+        console.error("Unable to start or resume exam attempt:", startError);
+        examResumeKeys.forEach(key => sessionStorage.removeItem(examResumeStorageKey(key)));
+        sessionStorage.removeItem("examResultConfirmation");
         showAttemptError(startError.message || "Unable to start this exam. Check your connection and retry.");
     }
 }
 
-function renderAttemptResult(result, status) {
-    if (!result) {
-        showAttemptError("This attempt is finalized, but its result could not be loaded. Contact your teacher.");
-        return;
-    }
+function renderAttemptResult(status = "submitted") {
     examFinished = true;
     resultSubmissionStarted = true;
     clearInterval(timer);
@@ -1173,15 +1321,77 @@ function renderAttemptResult(result, status) {
     localStorage.removeItem(getAttemptCacheKey(attemptId));
     localStorage.removeItem(getAnswerQueueKey(attemptId));
     localStorage.removeItem("examAuthorized");
-    const review = Array.isArray(result.answersReview) ? result.answersReview : [];
+    sessionStorage.setItem("examResultConfirmation", JSON.stringify({
+        candidateName,
+        subject: selectedSubject,
+        topic: selectedTopic,
+        status: status === "expired" ? "expired" : "submitted"
+    }));
+    examResumeKeys.forEach(key => {
+        sessionStorage.removeItem(`examResume:${key}`);
+    });
+    const banner = document.getElementById("integrityBanner");
+    if (banner) {
+        banner.textContent = "";
+        banner.style.display = "none";
+    }
+    const confirmation = document.getElementById("submitConfirmation");
+    if (confirmation) confirmation.style.display = "none";
+    const saveStatus = document.getElementById("answerSaveStatus");
+    if (saveStatus) saveStatus.textContent = "";
+    document.body.classList.add("exam-submitted");
     const section = document.getElementById("examSection");
-    section.innerHTML = `<div class="result-box"><h1>${status === "expired" ? "Exam time ended" : "Exam submitted"}</h1><h2>${Number(result.score || 0)} / ${Number(result.totalQuestions || 0)}</h2><p>${Number(result.percentage || 0)}% - ${escapeHTML(result.remark || "")}</p><p>Your result has been saved.</p></div>${review.map(item => `<article class="question-box"><strong>Question ${Number(item.questionNumber || 0)}: ${escapeHTML(item.question || "")}</strong><p>Your answer: ${escapeHTML(item.selected || "Not answered")}</p><p>Correct answer: ${escapeHTML(item.correctAnswer || "")}</p><p>${item.isCorrect ? "Correct" : "Incorrect"}</p></article>`).join("")}<button type="button" onclick="window.location.href='index.html'">Return to home</button>`;
-    document.querySelector(".navigation").style.display = "none";
-    const palette = document.querySelector(".palette-box");
-    if (palette) palette.style.display = "none";
-    document.getElementById("instructions").style.display = "none";
-    document.getElementById("timer").style.display = "none";
-    document.getElementById("answerSaveStatus").textContent = "";
+    const confirmationMessage = status === "expired"
+        ? "Your exam time has ended and your answers have been submitted."
+        : "Your exam has been submitted successfully.";
+    section.innerHTML = `<div class="result-box"><h1>${confirmationMessage}</h1><div class="result-actions"><a href="student-result-login.html">View student result</a><a href="index.html">Return to home</a></div></div>`;
+}
+
+async function flushAnswersBeforeSubmit() {
+    const deadline = Date.now() + 5000;
+    while (true) {
+        if (answerSavePromise) {
+            const remainingMs = deadline - Date.now();
+            if (remainingMs <= 0) {
+                throw new Error("Timed out waiting for the current answer save");
+            }
+            let timeoutId;
+            const completed = await Promise.race([
+                answerSavePromise.then(success => ({ completed: true, success })),
+                new Promise(resolve => {
+                    timeoutId = setTimeout(() => resolve({ completed: false }), remainingMs);
+                })
+            ]);
+            clearTimeout(timeoutId);
+            if (!completed.completed) {
+                throw new Error("Timed out waiting for the current answer save");
+            }
+            if (!completed.success) {
+                throw new Error("The current answer save failed");
+            }
+        }
+
+        if (!Object.keys(readPendingAnswerChanges()).length) return;
+
+        const remainingMs = deadline - Date.now();
+        if (remainingMs <= 0) {
+            throw new Error("Timed out waiting for pending answer changes to save");
+        }
+        let timeoutId;
+        const saved = await Promise.race([
+            flushAnswerQueue().then(success => ({ completed: true, success })),
+            new Promise(resolve => {
+                timeoutId = setTimeout(() => resolve({ completed: false }), remainingMs);
+            })
+        ]);
+        clearTimeout(timeoutId);
+        if (!saved.completed) {
+            throw new Error("Timed out waiting for pending answer changes to save");
+        }
+        if (!saved.success) {
+            throw new Error("Pending answer changes could not be saved");
+        }
+    }
 }
 
 function showNoQuestions(message){
@@ -1353,28 +1563,24 @@ async function submitExam(forceSubmit = false){
     }
 
     try {
-        if (Object.keys(readPendingAnswerChanges()).length && !(await flushAnswerQueue())) {
-            throw new Error("Answer changes are still waiting for a connection");
-        }
+        if (!navigator.onLine) throw new Error("Cannot submit while offline");
+        if (!attemptId) throw new Error("No active exam attempt is available to submit");
+        await flushAnswersBeforeSubmit();
         const response = await fetch(`/attempt/${encodeURIComponent(attemptId)}/submit`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({})
         });
-        const data = await response.json();
-        if (!response.ok || data.success !== true) {
-            throw new Error(data.message || `Exam submission failed with status ${response.status}`);
+        if (!response.ok) {
+            throw new Error(`Exam submission failed with status ${response.status}`);
         }
-        renderAttemptResult({
-            _id: data.resultId,
-            score: data.score,
-            totalQuestions: data.total,
-            percentage: data.percentage,
-            remark: data.remark,
-            answersReview: data.review
-        }, data.status || "submitted");
+        const data = await response.json();
+        if (!data || data.success !== true) {
+            throw new Error((data && data.message) || "The server did not confirm the exam submission");
+        }
+        renderAttemptResult(data.status || "submitted");
     } catch (error) {
-        console.log(error);
+        console.error("Exam submission failed:", error);
         resultSubmissionStarted = false;
         examFinished = false;
         if (!timerSubmitStarted && attemptEndsAtMs > Date.now() + serverClockOffsetMs) {
@@ -1493,9 +1699,13 @@ document.addEventListener("visibilitychange", function () {
 });
 
 if (!examTerminated) {
-    loadExamConfig();
-    startOrResumeAttempt();
-    flushQueuedIntegrityEvents();
+    if (examResultConfirmationOnLoad) {
+        renderAttemptResult(examResultConfirmationOnLoad.status);
+    } else {
+        loadExamConfig();
+        startOrResumeAttempt();
+        flushQueuedIntegrityEvents();
+    }
 }
 
 document.addEventListener("visibilitychange", () => {
