@@ -12,9 +12,28 @@ const Formula = require("./Formula");
 const Assignment = require("./Assignment");
 const Submission = require("./Submission");
 const ExamConfig = require("./ExamConfig");
+const IntegrityEvent = require("./IntegrityEvent");
 const cloudinary = require("./cloudinary");
 
 const app = express();
+app.set("trust proxy", 1);
+
+const integrityIpBuckets = new Map();
+const integrityRateWindowMs = 60 * 1000;
+const integrityRateLimit = 30;
+
+const integrityBucketCleanup = setInterval(() => {
+    const cutoff = Date.now() - integrityRateWindowMs;
+    for (const [key, timestamps] of integrityIpBuckets) {
+        const recent = timestamps.filter(timestamp => timestamp > cutoff);
+        if (recent.length) {
+            integrityIpBuckets.set(key, recent);
+        } else {
+            integrityIpBuckets.delete(key);
+        }
+    }
+}, integrityRateWindowMs);
+if (typeof integrityBucketCleanup.unref === "function") integrityBucketCleanup.unref();
 
 const resourceSubjectAliases = [
     ["Account", "Financial Accounting"],
@@ -51,7 +70,8 @@ const databaseReady = mongoose.connect(process.env.MONGO_URI)
     return false;
 });
 
-app.use(express.json());
+app.use("/integrity-event", express.json({ limit: "4kb" }));
+app.use(express.json({ limit: "1mb" }));
 
 app.use(express.static("public"));
 
@@ -594,15 +614,24 @@ app.get("/exam-config/:subject", async (req, res) => {
         if (!config) {
             return res.json({
                 durationMinutes: 30,
+                graceSeconds: 10,
+                maxFlagsBeforeAutoSubmit: 0,
+                showWarnings: true,
                 subject,
                 topic: ""
             });
         }
 
-        res.json(config);
+        res.json({
+            ...config.toObject(),
+            graceSeconds: Number(config.graceSeconds ?? 10),
+            maxFlagsBeforeAutoSubmit: Number(config.maxFlagsBeforeAutoSubmit ?? 0),
+            showWarnings: config.showWarnings !== false,
+            durationMinutes: Number(config.durationMinutes ?? 30)
+        });
     } catch (error) {
         console.log(error);
-        res.json({ durationMinutes: 30 });
+        res.json({ durationMinutes: 30, graceSeconds: 10, maxFlagsBeforeAutoSubmit: 0, showWarnings: true });
     }
 });
 
@@ -620,21 +649,30 @@ app.get("/exam-config/:subject/:topic", async (req, res) => {
         if (!config) {
             return res.json({
                 durationMinutes: 30,
+                graceSeconds: 10,
+                maxFlagsBeforeAutoSubmit: 0,
+                showWarnings: true,
                 subject,
                 topic
             });
         }
 
-        res.json(config);
+        res.json({
+            ...config.toObject(),
+            graceSeconds: Number(config.graceSeconds ?? 10),
+            maxFlagsBeforeAutoSubmit: Number(config.maxFlagsBeforeAutoSubmit ?? 0),
+            showWarnings: config.showWarnings !== false,
+            durationMinutes: Number(config.durationMinutes ?? 30)
+        });
     } catch (error) {
         console.log(error);
-        res.json({ durationMinutes: 30 });
+        res.json({ durationMinutes: 30, graceSeconds: 10, maxFlagsBeforeAutoSubmit: 0, showWarnings: true });
     }
 });
 
 app.post("/exam-config", async (req, res) => {
     try {
-        const { subject, topic = "", durationMinutes } = req.body || {};
+        const { subject, topic = "", durationMinutes, graceSeconds, maxFlagsBeforeAutoSubmit, showWarnings } = req.body || {};
 
         if (!subject || !durationMinutes || Number(durationMinutes) < 1) {
             return res.status(400).json({
@@ -644,13 +682,19 @@ app.post("/exam-config", async (req, res) => {
         }
 
         const normalizedDuration = Number(durationMinutes);
+        const normalizedGraceSeconds = Number.isFinite(Number(graceSeconds)) ? Number(graceSeconds) : 10;
+        const normalizedMaxFlags = Number.isFinite(Number(maxFlagsBeforeAutoSubmit)) ? Number(maxFlagsBeforeAutoSubmit) : 0;
+        const normalizedShowWarnings = typeof showWarnings === "boolean" ? showWarnings : true;
 
         const config = await ExamConfig.findOneAndUpdate(
             { subject, topic },
             {
                 subject,
                 topic,
-                durationMinutes: normalizedDuration
+                durationMinutes: normalizedDuration,
+                graceSeconds: Math.max(0, Math.min(normalizedGraceSeconds, 86400)),
+                maxFlagsBeforeAutoSubmit: Math.max(0, Math.min(normalizedMaxFlags, 1000)),
+                showWarnings: normalizedShowWarnings
             },
             {
                 upsert: true,
@@ -1014,6 +1058,124 @@ function normalizeStudentKey(value) {
         .toLowerCase()
         .replace(/\s+/g, " ");
 }
+
+function validateIntegrityEvent(req, res, next) {
+    const body = req.body;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+        return res.status(400).json({ success: false, message: "A JSON object is required" });
+    }
+
+    const allowedKeys = new Set(["studentKey", "candidateName", "subject", "topic", "type", "hiddenSeconds", "clientTimestamp", "userAgent"]);
+    if (Object.keys(body).some(key => !allowedKeys.has(key))) {
+        return res.status(400).json({ success: false, message: "Unknown integrity fields are not allowed" });
+    }
+
+    if (typeof body.studentKey !== "string" || !body.studentKey.trim() || body.studentKey.length > 200) {
+        return res.status(400).json({ success: false, message: "studentKey must be a valid string" });
+    }
+    if (body.type !== "hidden_return") {
+        return res.status(400).json({ success: false, message: "Unsupported integrity event type" });
+    }
+    if (typeof body.hiddenSeconds !== "number" || !Number.isFinite(body.hiddenSeconds) || body.hiddenSeconds < 0 || body.hiddenSeconds > 86400) {
+        return res.status(400).json({ success: false, message: "hiddenSeconds must be a number between 0 and 86400" });
+    }
+
+    const stringLimits = { candidateName: 200, subject: 200, topic: 200, userAgent: 500 };
+    for (const [field, maxLength] of Object.entries(stringLimits)) {
+        if (typeof body[field] !== "undefined" && (typeof body[field] !== "string" || body[field].length > maxLength)) {
+            return res.status(400).json({ success: false, message: `${field} must be a string no longer than ${maxLength} characters` });
+        }
+    }
+
+    const now = Date.now();
+    let clientTimestamp = now;
+    if (typeof body.clientTimestamp === "number" && Number.isFinite(body.clientTimestamp)) {
+        if (body.clientTimestamp >= now - 86400000 && body.clientTimestamp <= now) {
+            clientTimestamp = body.clientTimestamp;
+        }
+    } else if (typeof body.clientTimestamp === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(body.clientTimestamp)) {
+        const parsedTimestamp = Date.parse(body.clientTimestamp);
+        if (Number.isFinite(parsedTimestamp) && parsedTimestamp >= now - 86400000 && parsedTimestamp <= now) {
+            clientTimestamp = parsedTimestamp;
+        }
+    }
+
+    req.integrityEvent = {
+        studentKey: normalizeStudentKey(body.studentKey),
+        candidateName: body.candidateName || "",
+        subject: body.subject || "",
+        topic: body.topic || "",
+        type: body.type,
+        hiddenSeconds: body.hiddenSeconds,
+        clientTimestamp,
+        userAgent: body.userAgent || req.headers["user-agent"] || ""
+    };
+    next();
+}
+
+function enforceIntegrityRateLimit(req, res, next) {
+    const studentKey = req.integrityEvent.studentKey;
+    const key = `${req.ip || req.socket.remoteAddress || "unknown"}:${studentKey}`;
+    const now = Date.now();
+    const cutoff = now - integrityRateWindowMs;
+    const recent = (integrityIpBuckets.get(key) || []).filter(timestamp => timestamp > cutoff);
+    if (recent.length >= integrityRateLimit) {
+        integrityIpBuckets.set(key, recent);
+        return res.status(429).json({ success: false, message: "Too many integrity events" });
+    }
+    recent.push(now);
+    integrityIpBuckets.set(key, recent);
+    next();
+}
+
+app.post("/integrity-event", validateIntegrityEvent, enforceIntegrityRateLimit, async (req, res) => {
+    try {
+        const event = new IntegrityEvent({
+            ...req.integrityEvent,
+            serverTimestamp: Date.now()
+        });
+        await event.save();
+        res.json({ success: true, id: event._id });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+app.get("/integrity-events", async (req, res) => {
+    try {
+        /* TODO: This route is not protected server-side. Lock it down in the security phase before exposing it to admins or students. */
+        const { student, subject } = req.query || {};
+        const filters = {};
+        if (student) {
+            filters.studentKey = normalizeStudentKey(student);
+        }
+        if (subject) {
+            filters.subject = String(subject).slice(0, 200);
+        }
+
+        const items = await IntegrityEvent.find(filters)
+            .sort({ serverTimestamp: -1 })
+            .limit(200)
+            .lean();
+
+        res.json(items.map(item => ({
+            _id: item._id,
+            studentKey: item.studentKey,
+            candidateName: item.candidateName || "",
+            subject: item.subject || "",
+            topic: item.topic || "",
+            type: item.type,
+            hiddenSeconds: item.hiddenSeconds,
+            clientTimestamp: item.clientTimestamp,
+            serverTimestamp: item.serverTimestamp,
+            userAgent: item.userAgent || ""
+        })));
+    } catch (error) {
+        console.log(error);
+        res.json([]);
+    }
+});
 
 app.post("/save-result", async (req, res) => {
 
