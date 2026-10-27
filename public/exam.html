@@ -712,11 +712,17 @@ margin-bottom:10px;
 
 <script>
 
+localStorage.removeItem("candidatePassport");
+
 const candidateName =
 localStorage.getItem("candidateName") || "Unknown Candidate";
 
+const candidateStudentKey =
+candidateName.trim().toLowerCase().replace(/\s+/g, " ");
 const candidatePassport =
-localStorage.getItem("candidatePassport");
+localStorage.getItem(`candidatePassport:${candidateStudentKey}`);
+const candidatePhotoId =
+localStorage.getItem(`candidatePhotoId:${candidateStudentKey}`);
 
 const passportImage =
 document.getElementById("passportPreview");
@@ -1284,7 +1290,8 @@ async function startOrResumeAttempt() {
                 studentKey: getStudentKey(),
                 candidateName,
                 subject: selectedSubject,
-                topic: selectedTopic
+                topic: selectedTopic,
+                ...(candidatePhotoId ? { photoId: candidatePhotoId } : {})
             })
         });
         if (!response.ok) {

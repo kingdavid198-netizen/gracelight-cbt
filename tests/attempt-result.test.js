@@ -10,6 +10,7 @@ function makeMockStore(options = {}) {
     const state = {
         attempt: {
             attemptId: "attempt-test-123",
+            photoId: "photo-test-123",
             status: "active",
             endsAt: new Date("2026-10-14T07:00:00.000Z"),
             questionIds: [],
@@ -37,6 +38,7 @@ function makeMockStore(options = {}) {
             buildResult: async (id, attempt, resultDate) => ({
                 _id: String(id),
                 studentKey: "student",
+                photoId: attempt.photoId,
                 date: resultDate.toLocaleString("en-NG", { timeZone: "Africa/Lagos" }),
                 attemptAtBuild: attempt.attemptId
             }),
@@ -79,6 +81,8 @@ async function testRepeatedFinalizationUsesOneResult() {
     assert.strictEqual(first.result, second.result);
     assert.strictEqual(first.result._id, deterministicResultId(originalAttempt.attemptId));
     assert.strictEqual(first.attempt.resultId, second.attempt.resultId);
+    assert.strictEqual(first.result.photoId, "photo-test-123");
+    assert.strictEqual(second.result.photoId, first.result.photoId);
 }
 
 async function testCrashAfterResultSaveCanRetry() {

@@ -429,8 +429,7 @@ body {
         background: #fff;
     }
 
-    .detail-title,
-    .result-date {
+    .detail-title {
         display: none !important;
     }
 
@@ -458,6 +457,7 @@ body {
 
 <div class="container">
 
+<div class="result-slip" id="resultSlip">
 <div class="school-header">
 
 <img src="logo.png" class="school-logo">
@@ -501,16 +501,19 @@ body {
     </main>
 
 </div>
+</div>
 
 <script src="vendor/jspdf.umd.min.js"></script>
+<script src="result-date.js"></script>
 <script>
 
 const studentName = (localStorage.getItem("studentSearch") || "").trim();
 let studentHistory = [];
 let selectedResultId = null;
+let resultPhotoRequest = 0;
 
 function normalizeStudentKey(value) {
-    return String(value || "").trim().toLowerCase();
+    return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function escapeHtml(value) {
@@ -558,7 +561,7 @@ function renderAttemptList() {
         const isActive = result._id === selectedResultId ? "active" : "";
         return `
             <button type="button" class="history-item ${isActive}" data-result-id="${result._id}">
-                <span class="date">${result.date || "N/A"}</span>
+                <span class="date">${escapeHtml(formatResultDate(result))}</span>
                 <div class="meta">
                     <span>${result.subject || "N/A"}</span>
                     <span class="score-badge">${result.score || 0}/${result.totalQuestions || 0}</span>
@@ -582,15 +585,16 @@ function renderAttemptList() {
 
 function renderSelectedResult(student) {
     document.getElementById("studentInfo").innerHTML = `
-        <p><strong>Candidate:</strong> ${student.candidateName || "N/A"}</p>
-        <p><strong>Subject:</strong> ${student.subject || "N/A"}</p>
-        <p><strong>Topic:</strong> ${student.topic || "N/A"}</p>
-        <p class="result-date"><strong>Date:</strong> ${student.date || "N/A"}</p>
-        <p><strong>Score:</strong> <span class="score">${student.score || 0}/${student.totalQuestions || 0}</span></p>
-        <p><strong>Percentage:</strong> ${student.percentage || 0}%</p>
-        <p><strong>Remark:</strong> ${student.remark || "N/A"}</p>
+        <p><strong>Candidate:</strong> ${escapeHtml(student.candidateName || "N/A")}</p>
+        <p><strong>Subject:</strong> ${escapeHtml(student.subject || "N/A")}</p>
+        <p><strong>Topic:</strong> ${escapeHtml(student.topic || "N/A")}</p>
+        <p class="result-date"><strong>Date:</strong> ${escapeHtml(formatResultDate(student))}</p>
+        <p><strong>Score:</strong> <span class="score">${escapeHtml(student.score || 0)}/${escapeHtml(student.totalQuestions || 0)}</span></p>
+        <p><strong>Percentage:</strong> ${escapeHtml(student.percentage || 0)}%</p>
+        <p><strong>Remark:</strong> ${escapeHtml(student.remark || "N/A")}</p>
     `;
 
+    loadResultPhoto(student);
     renderAnswerReview(student);
 }
 
@@ -691,11 +695,43 @@ function renderAnswerReview(student) {
 loadStudentResult();
 
 const resultPassport = document.getElementById("resultPassport");
-const savedPassport = localStorage.getItem("candidatePassport");
+const passportPlaceholder = "images/passport-placeholder.png";
+let resultPhotoObjectUrl = null;
 
-if (savedPassport && resultPassport) {
-    resultPassport.src = savedPassport;
+async function loadResultPhoto(student) {
+    const requestId = ++resultPhotoRequest;
+    const previousUrl = resultPhotoObjectUrl;
+    resultPhotoObjectUrl = null;
+    if (previousUrl) URL.revokeObjectURL(previousUrl);
+    resultPassport.src = passportPlaceholder;
+    if (!student || !student._id) return;
+
+    try {
+        const response = await fetch(`/candidate-photo/${encodeURIComponent(student._id)}`, { cache: "no-store" });
+        if (response.status === 404) return;
+        if (!response.ok) throw new Error(`Photo request failed (HTTP ${response.status})`);
+        const objectUrl = URL.createObjectURL(await response.blob());
+        if (requestId !== resultPhotoRequest || String(selectedResultId) !== String(student._id)) {
+            URL.revokeObjectURL(objectUrl);
+            return;
+        }
+        resultPhotoObjectUrl = objectUrl;
+        resultPassport.src = objectUrl;
+        await resultPassport.decode();
+    } catch (error) {
+        if (requestId === resultPhotoRequest) {
+            if (resultPhotoObjectUrl) URL.revokeObjectURL(resultPhotoObjectUrl);
+            resultPhotoObjectUrl = null;
+            resultPassport.src = passportPlaceholder;
+            console.error("Unable to load result photo:", error);
+        }
+    }
 }
+
+resultPassport.onerror = () => {
+    resultPassport.onerror = null;
+    resultPassport.src = passportPlaceholder;
+};
 
 function pdfText(value) {
     return String(value == null || value === "" ? "N/A" : value)
@@ -714,38 +750,53 @@ function safePdfFilenamePart(value) {
     return cleaned || "Result";
 }
 
-function getLocalImageData(image, allowDataImage = false) {
-    if (!image || !image.complete || !image.naturalWidth || !image.naturalHeight) return null;
-
-    const source = image.currentSrc || image.src;
-    const isDataImage = /^data:image\/(?:png|jpe?g|webp);base64,/i.test(source);
-    if (!isDataImage || !allowDataImage) {
-        try {
-            if (new URL(source, window.location.href).origin !== window.location.origin) return null;
-        } catch (error) {
-            return null;
-        }
-    }
-
-    try {
-        const canvas = document.createElement("canvas");
-        canvas.width = image.naturalWidth;
-        canvas.height = image.naturalHeight;
-        const context = canvas.getContext("2d");
-        if (!context) return null;
-        context.drawImage(image, 0, 0);
-        return canvas.toDataURL("image/jpeg", 0.88);
-    } catch (error) {
-        console.warn("Skipping result photo in PDF:", error);
-        return null;
-    }
+async function waitForImage(image) {
+    if (image.complete && image.naturalWidth && image.naturalHeight) return;
+    await image.decode();
 }
 
-function getResultPhotoData() {
-    return getLocalImageData(document.getElementById("resultPassport"), true);
+async function getImageData(image) {
+    await waitForImage(image);
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Image processing is unavailable in this browser.");
+    context.drawImage(image, 0, 0);
+    return canvas.toDataURL("image/png");
 }
 
-function createResultPdf(student) {
+async function getCircularPhotoData() {
+    const image = resultPassport;
+    await waitForImage(image);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 300;
+    canvas.height = 300;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Photo processing is unavailable in this browser.");
+
+    const scale = Math.max(canvas.width / image.naturalWidth, canvas.height / image.naturalHeight);
+    const sourceWidth = canvas.width / scale;
+    const sourceHeight = canvas.height / scale;
+    context.beginPath();
+    context.arc(150, 150, 150, 0, Math.PI * 2);
+    context.clip();
+    context.drawImage(
+        image,
+        (image.naturalWidth - sourceWidth) / 2,
+        (image.naturalHeight - sourceHeight) / 2,
+        sourceWidth,
+        sourceHeight,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+    return canvas.toDataURL("image/png");
+}
+
+async function createResultPdf(student) {
     const JsPDF = window.jspdf && window.jspdf.jsPDF;
     if (typeof JsPDF !== "function") {
         throw new Error("The PDF library is unavailable. Reload the page and try again.");
@@ -753,101 +804,116 @@ function createResultPdf(student) {
 
     const pdf = new JsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pageWidth = 210;
-    const margin = 18;
     const centerX = pageWidth / 2;
-    const photo = getResultPhotoData();
-    const schoolLogo = getLocalImageData(document.querySelector(".school-logo"));
-    const detailWidth = 174;
+    const photo = await getCircularPhotoData();
+    const schoolLogo = await getImageData(document.querySelector(".school-logo"));
+    const detailWidth = 160;
     const detailX = (pageWidth - detailWidth) / 2;
-    const innerPadding = 10;
-    const labelWidth = 37;
-    const photoSpace = photo ? 25 : 0;
-    const valueX = detailX + innerPadding + labelWidth;
-    const valueWidth = detailWidth - innerPadding * 2 - labelWidth - photoSpace;
-    const rows = [
-        ["Candidate", pdfText(student.candidateName)],
-        ["Subject", pdfText(student.subject)],
-        ["Topic", pdfText(student.topic)],
-        ["Score", `${pdfText(student.score)} / ${pdfText(student.totalQuestions)}`],
-        ["Percentage", `${pdfText(student.percentage)}%`],
-        ["Remark", pdfText(student.remark)]
+    const photoSize = 15;
+    const photoTitleGap = 4;
+    const detailPadding = 8;
+    const cellPadding = 3;
+    const cellGap = 3;
+    const infoWidth = detailWidth - detailPadding * 2;
+    const cellWidth = (infoWidth - cellGap) / 2;
+    const lineHeight = 10 * 1.35 / 2.83465;
+    const cells = [
+        { label: "Candidate", value: pdfText(student.candidateName) },
+        { label: "Subject", value: pdfText(student.subject) },
+        { label: "Topic", value: pdfText(student.topic) },
+        { label: "Date", value: formatResultDate(student) },
+        { label: "Score", value: `${pdfText(student.score)} / ${pdfText(student.totalQuestions)}` },
+        { label: "Percentage", value: `${pdfText(student.percentage)}%` },
+        { label: "Remark", value: pdfText(student.remark) }
     ];
-    const contentTop = 72;
-    const contentBottom = 263;
-    let fontSize = 11;
-    let rowLayouts;
-    let detailsHeight;
-
-    do {
-        const lineHeight = fontSize * 0.42;
-        rowLayouts = rows.map(([label, value]) => {
-            pdf.setFont("helvetica", "normal");
-            pdf.setFontSize(fontSize);
-            const lines = pdf.splitTextToSize(value, valueWidth);
-            return {
-                label,
-                lines,
-                lineHeight,
-                rowHeight: Math.max(11, lines.length * lineHeight + 5)
-            };
-        });
-        detailsHeight = 14 + rowLayouts.reduce((height, row) => height + row.rowHeight, 0);
-        if (detailsHeight <= contentBottom - contentTop || fontSize <= 7) break;
-        fontSize -= 1;
-    } while (fontSize >= 7);
-
-    if (detailsHeight > contentBottom - contentTop) {
-        throw new Error("The selected result has too much text to fit on one A4 page.");
-    }
 
     pdf.setTextColor(31, 41, 55);
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(17);
-    if (schoolLogo) {
-        try {
-            pdf.addImage(schoolLogo, "JPEG", centerX - 8, 9, 16, 16, undefined, "FAST");
-        } catch (error) {
-            console.warn("Skipping school logo in PDF:", error);
-        }
-    }
-    pdf.text(pdfText("GraceLight Learning Centre"), centerX, 33, { align: "center", maxWidth: pageWidth - margin * 2 });
+    pdf.setFontSize(16);
+    pdf.addImage(schoolLogo, "PNG", centerX - 9, 15, 18, 18);
+    pdf.setTextColor(37, 99, 235);
+    pdf.text("GraceLight Learning Centre", centerX, 39, { align: "center" });
     pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "italic");
+    pdf.setFontSize(9);
     pdf.setTextColor(85, 85, 85);
-    pdf.text("Where Wisdom Meets Purpose", centerX, 40, { align: "center" });
+    pdf.text("Where Wisdom Meets Purpose", centerX, 45, { align: "center" });
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(15);
+    pdf.setFontSize(13);
     pdf.setTextColor(30, 60, 114);
-    pdf.text("CBT RESULT SLIP", centerX, 55, { align: "center" });
+    const slipTitle = "CBT RESULT SLIP";
+    const titleWidth = pdf.getTextWidth(slipTitle);
+    const identityWidth = photoSize + photoTitleGap + titleWidth;
+    const photoX = (pageWidth - identityWidth) / 2;
+    const photoY = 48.1;
+    pdf.addImage(photo, "PNG", photoX, photoY, photoSize, photoSize);
+    pdf.setDrawColor(219, 234, 254);
+    pdf.setLineWidth(0.5);
+    pdf.circle(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2);
+    pdf.text(slipTitle, photoX + photoSize + photoTitleGap, photoY + photoSize / 2, { baseline: "middle" });
 
-    let boxY = Math.max(contentTop, Math.min(contentBottom - detailsHeight, (contentTop + contentBottom - detailsHeight) / 2));
+    const rows = [[0, 1], [2, 3], [4, 5], [6, null]].map(pair => pair.map(index => {
+        if (index === null) return null;
+        const cell = cells[index];
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(10);
+        const labelWidth = pdf.getTextWidth(`${cell.label}: `);
+        pdf.setFont("helvetica", "normal");
+        const textWidth = cellWidth - cellPadding * 2;
+        const firstLines = pdf.splitTextToSize(cell.value, Math.max(8, textWidth - labelWidth));
+        const firstLine = firstLines.shift() || "";
+        const remainingText = cell.value.slice(firstLine.length).trimStart();
+        const valueLines = [
+            firstLine,
+            ...(remainingText ? pdf.splitTextToSize(remainingText, textWidth) : [])
+        ];
+        return {
+            ...cell,
+            labelWidth,
+            valueLines,
+            height: Math.max(10, valueLines.length * lineHeight + cellPadding * 2 + 0.52)
+        };
+    }));
+    const rowGap = 3;
+    const rowsHeight = rows.reduce((height, row) =>
+        height + Math.max(...row.filter(Boolean).map(cell => cell.height)), 0
+    ) + rowGap * (rows.length - 1);
+    const detailHeight = detailPadding * 2 + rowsHeight + 0.52;
+    const boxY = 71.1;
     pdf.setDrawColor(148, 163, 184);
     pdf.setLineWidth(0.6);
-    pdf.roundedRect(detailX, boxY, detailWidth, detailsHeight, 3, 3);
+    pdf.roundedRect(detailX, boxY, detailWidth, detailHeight, 3, 3);
 
-    let rowY = boxY + innerPadding;
-    rowLayouts.forEach(row => {
-        pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(fontSize);
-        pdf.setTextColor(55, 65, 81);
-        pdf.text(`${row.label}:`, detailX + innerPadding, rowY);
-
-        const isRemark = row.label === "Remark";
-        const isPercentage = row.label === "Percentage";
-        pdf.setFont("helvetica", isRemark || isPercentage ? "bold" : "normal");
-        pdf.setFontSize(isPercentage ? fontSize + 2 : fontSize);
-        pdf.setTextColor(isPercentage ? 15 : 31, isPercentage ? 118 : 41, isPercentage ? 110 : 55);
-        pdf.text(row.lines, valueX, rowY, { maxWidth: valueWidth });
-        rowY += row.rowHeight;
+    let rowY = boxY + detailPadding + 0.3;
+    rows.forEach(row => {
+        const rowHeight = Math.max(...row.filter(Boolean).map(cell => cell.height));
+        row.forEach((cell, column) => {
+            if (!cell) return;
+            const cellX = detailX + detailPadding + column * (cellWidth + cellGap);
+            pdf.setDrawColor(229, 231, 235);
+            pdf.setLineWidth(0.25);
+            pdf.roundedRect(cellX, rowY, cellWidth, rowHeight, 2, 2);
+            pdf.setFontSize(10);
+            pdf.setTextColor(31, 41, 55);
+            pdf.setFont("helvetica", "bold");
+            const baseline = rowY + cellPadding + 3.6;
+            pdf.text(`${cell.label}:`, cellX + cellPadding, baseline);
+            pdf.setFont("helvetica", "normal");
+            pdf.text(
+                cell.valueLines[0] || "",
+                cellX + cellPadding + cell.labelWidth,
+                baseline
+            );
+            if (cell.valueLines.length > 1) {
+                pdf.text(
+                    cell.valueLines.slice(1),
+                    cellX + cellPadding,
+                    baseline + lineHeight
+                );
+            }
+        });
+        rowY += rowHeight + rowGap;
     });
-
-    if (photo) {
-        try {
-            pdf.addImage(photo, "JPEG", detailX + detailWidth - 29, boxY + 7, 20, 20, undefined, "FAST");
-        } catch (error) {
-            console.warn("Skipping result photo in PDF:", error);
-        }
-    }
 
     const filename = [
         student.candidateName,
@@ -855,9 +921,10 @@ function createResultPdf(student) {
         student.topic
     ].map(safePdfFilenamePart).join("_") + ".pdf";
     pdf.save(filename);
+    return pdf;
 }
 
-function downloadSelectedResultPdf() {
+async function downloadSelectedResultPdf() {
     const status = document.getElementById("downloadStatus");
     const selectedResult = studentHistory.find(result => String(result._id) === String(selectedResultId));
     if (!selectedResult) {
@@ -867,7 +934,7 @@ function downloadSelectedResultPdf() {
 
     status.textContent = "";
     try {
-        createResultPdf(selectedResult);
+        await createResultPdf(selectedResult);
     } catch (error) {
         console.error("Unable to create result PDF:", error);
         status.textContent = error.message || "The PDF could not be created. Please try again.";
