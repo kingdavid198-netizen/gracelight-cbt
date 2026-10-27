@@ -5,9 +5,11 @@ const multer = require("multer");
 const path = require("path");
 const XLSX = require("xlsx");
 const mongoose = require("mongoose");
+const { connect, requireTestDatabase } = require("./db-connect");
 const crypto = require("crypto");
 const Question = require("./Question");
 const ExamAttempt = require("./ExamAttempt");
+const CandidatePhoto = require("./CandidatePhoto");
 const markAttempt = require("./exam-marking");
 const {
     finalizeAttemptResult,
@@ -28,14 +30,17 @@ app.set("trust proxy", 1);
 
 const integrityIpBuckets = new Map();
 const answerAttemptBuckets = new Map();
+const candidatePhotoIpBuckets = new Map();
 const integrityRateWindowMs = 60 * 1000;
 const integrityRateLimit = 30;
 const attemptAnswerRateLimit = 120;
+const candidatePhotoRateLimit = 10;
 const attemptSubmitGraceMs = 15 * 1000;
+const requiresTestDatabase = process.env.NODE_ENV === "test" || process.env.REQUIRE_TEST_DATABASE === "true";
 
 const integrityBucketCleanup = setInterval(() => {
     const cutoff = Date.now() - integrityRateWindowMs;
-    for (const buckets of [integrityIpBuckets, answerAttemptBuckets]) {
+    for (const buckets of [integrityIpBuckets, answerAttemptBuckets, candidatePhotoIpBuckets]) {
         for (const [key, timestamps] of buckets) {
             const recent = timestamps.filter(timestamp => timestamp > cutoff);
             if (recent.length) {
@@ -64,8 +69,11 @@ if (!fs.existsSync("uploads")) {
     fs.mkdirSync("uploads", { recursive: true });
 }
 
-const databaseReady = mongoose.connect(process.env.MONGO_URI)
+const databaseReady = connect()
 .then(async () => {
+    if (requiresTestDatabase) {
+        requireTestDatabase();
+    }
     console.log("MongoDB Connected");
     try {
         await Submission.collection.dropIndex("assignment_1_studentKey_1");
@@ -79,11 +87,45 @@ const databaseReady = mongoose.connect(process.env.MONGO_URI)
     return true;
 })
 .catch(error => {
+    if (requiresTestDatabase) {
+        console.error(`MongoDB test connection failed: ${error.name || "Error"}`);
+        process.exit(1);
+    }
     console.log(error);
     return false;
 });
 
 app.use("/integrity-event", express.json({ limit: "4kb" }));
+app.post("/candidate-photo", rateLimitCandidatePhoto, express.json({ limit: "140kb" }), async (req, res) => {
+    try {
+        const body = req.body || {};
+        const studentKey = typeof body.studentKey === "string" ? normalizeStudentKey(body.studentKey) : "";
+        const match = typeof body.dataUrl === "string"
+            ? body.dataUrl.match(/^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/)
+            : null;
+        if (!studentKey || studentKey.length > 200 || !match || Object.keys(body).some(key => !["studentKey", "dataUrl"].includes(key))) {
+            return res.status(400).json({ success: false, message: "A student key and JPEG data URL are required" });
+        }
+
+        const jpeg = Buffer.from(match[1], "base64");
+        if (jpeg.length > 100 * 1024 || jpeg.toString("base64") !== match[1] ||
+            jpeg.length < 3 || jpeg[0] !== 0xff || jpeg[1] !== 0xd8 || jpeg[2] !== 0xff) {
+            return res.status(400).json({ success: false, message: "The JPEG photo is invalid or exceeds 100KB" });
+        }
+
+        const photo = new CandidatePhoto({
+            studentKey,
+            dataUrl: body.dataUrl,
+            size: jpeg.length
+        });
+        await photo.save();
+        return res.status(201).json({ photoId: String(photo._id) });
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ success: false, message: "Unable to save candidate photo" });
+    }
+});
+/* TODO: Protect candidate photo upload in the security phase. */
 app.use(express.json({ limit: "1mb" }));
 
 app.use(express.static("public"));
@@ -698,6 +740,7 @@ async function finalizeAttempt(attempt, finalizedAt = new Date()) {
                 _id: resultId,
                 studentKey: claimedAttempt.studentKey,
                 candidateName: claimedAttempt.candidateName,
+                photoId: claimedAttempt.photoId,
                 subject: claimedAttempt.subject,
                 topic: claimedAttempt.topic,
                 score,
@@ -724,6 +767,20 @@ async function finalizeAttempt(attempt, finalizedAt = new Date()) {
     return finalized;
 }
 
+function rateLimitCandidatePhoto(req, res, next) {
+    const key = req.ip || req.socket.remoteAddress || "unknown";
+    const now = Date.now();
+    const recent = (candidatePhotoIpBuckets.get(key) || [])
+        .filter(timestamp => now - timestamp < integrityRateWindowMs);
+    if (recent.length >= candidatePhotoRateLimit) {
+        candidatePhotoIpBuckets.set(key, recent);
+        return res.status(429).json({ success: false, message: "Too many candidate photo uploads" });
+    }
+    recent.push(now);
+    candidatePhotoIpBuckets.set(key, recent);
+    return next();
+}
+
 function rateLimitAttemptAnswers(req, res, next) {
     const attemptId = req.params.attemptId;
     const now = Date.now();
@@ -740,7 +797,7 @@ function rateLimitAttemptAnswers(req, res, next) {
 app.post("/attempt/start", async (req, res) => {
     try {
         const body = req.body || {};
-        const allowedFields = new Set(["studentKey", "candidateName", "subject", "topic"]);
+        const allowedFields = new Set(["studentKey", "candidateName", "subject", "topic", "photoId"]);
         if (typeof body !== "object" || Array.isArray(body) || Object.keys(body).some(key => !allowedFields.has(key))) {
             return res.status(400).json({ success: false, message: "Invalid exam start request" });
         }
@@ -753,6 +810,17 @@ app.post("/attempt/start", async (req, res) => {
         const topic = typeof body.topic === "string" ? body.topic.trim() : "";
         if (!studentKey || studentKey.length > 200 || !candidateName || candidateName.length > 200 || !subject || subject.length > 200 || !topic || topic.length > 200) {
             return res.status(400).json({ success: false, message: "Candidate, student key, subject and topic are required" });
+        }
+        let photoId;
+        if (body.photoId !== undefined && body.photoId !== null && body.photoId !== "") {
+            if (typeof body.photoId !== "string" || !mongoose.Types.ObjectId.isValid(body.photoId)) {
+                return res.status(400).json({ success: false, message: "Candidate photo id is invalid" });
+            }
+            const photo = await CandidatePhoto.findById(body.photoId).select("studentKey").lean();
+            if (!photo || photo.studentKey !== studentKey) {
+                return res.status(404).json({ success: false, message: "Candidate photo was not found for this student" });
+            }
+            photoId = String(photo._id);
         }
 
         const now = new Date();
@@ -785,6 +853,7 @@ app.post("/attempt/start", async (req, res) => {
             attemptId: crypto.randomUUID(),
             studentKey,
             candidateName,
+            photoId,
             subject,
             topic,
             questionIds: orderedQuestions.map(question => question._id),
@@ -891,21 +960,52 @@ app.post("/attempt/:attemptId/submit", async (req, res) => {
     }
 });
 
-const attemptExpirySweep = setInterval(async () => {
+app.get("/candidate-photo/:resultId", async (req, res) => {
+    /* TODO: Protect this route and /results during the security phase. */
+    res.set("Cache-Control", "private, no-store");
+    res.set("X-Content-Type-Options", "nosniff");
     try {
-        const now = new Date();
-        const expiredAttempts = await ExamAttempt.find({
-            status: "active",
-            endsAt: { $lte: new Date(now.getTime() - attemptSubmitGraceMs) }
-        }).limit(50);
-        for (const attempt of expiredAttempts) {
-            await finalizeAttempt(attempt, now);
+        if (!mongoose.Types.ObjectId.isValid(req.params.resultId)) {
+            return res.status(404).json({ success: false, message: "Candidate photo was not found" });
         }
+        const result = await Result.findById(req.params.resultId).select("photoId").lean();
+        if (!result || !result.photoId) {
+            return res.status(404).json({ success: false, message: "Candidate photo was not found" });
+        }
+        const photo = await CandidatePhoto.findById(result.photoId).select("dataUrl").lean();
+        if (!photo) {
+            return res.status(404).json({ success: false, message: "Candidate photo was not found" });
+        }
+        const match = photo.dataUrl.match(/^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/);
+        if (!match) {
+            return res.status(500).json({ success: false, message: "Candidate photo data is invalid" });
+        }
+        return res.type("image/jpeg").send(Buffer.from(match[1], "base64"));
     } catch (error) {
         console.log(error);
+        return res.status(500).json({ success: false, message: "Unable to load candidate photo" });
     }
-}, 15000);
-if (typeof attemptExpirySweep.unref === "function") attemptExpirySweep.unref();
+});
+
+function startAttemptExpirySweep() {
+    const attemptExpirySweep = setInterval(async () => {
+        try {
+            const now = new Date();
+            const expiredAttempts = await ExamAttempt.find({
+                status: "active",
+                endsAt: { $lte: new Date(now.getTime() - attemptSubmitGraceMs) }
+            }).limit(50);
+            for (const attempt of expiredAttempts) {
+                await finalizeAttempt(attempt, now);
+            }
+        } catch (error) {
+            console.log(error);
+        }
+    }, 15000);
+    if (typeof attemptExpirySweep.unref === "function") attemptExpirySweep.unref();
+}
+
+if (!requiresTestDatabase) startAttemptExpirySweep();
 
 app.get("/exam-config", async (req, res) => {
     try {
@@ -1536,6 +1636,7 @@ app.get("/results/:studentKey", async (req, res) => {
 
     try {
 
+        /* TODO: Protect this route during the security phase. */
         const studentKey = normalizeStudentKey(req.params.studentKey);
 
         const results = await Result.find({ studentKey })
@@ -1807,6 +1908,18 @@ app.post(
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+function listen() {
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+}
+
+if (requiresTestDatabase) {
+    databaseReady.then(ready => {
+        if (!ready) process.exit(1);
+        startAttemptExpirySweep();
+        listen();
+    });
+} else {
+    listen();
+}

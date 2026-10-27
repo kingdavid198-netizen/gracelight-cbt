@@ -9,6 +9,7 @@ const ResultSchema = new mongoose.Schema({
         lowercase: true
     },
     candidateName: String,
+    photoId: String,
     subject: String,
     topic: String,
     score: Number,

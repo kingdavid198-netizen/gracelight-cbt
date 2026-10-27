@@ -18,6 +18,7 @@ const ExamAttemptSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
+    photoId: String,
     subject: {
         type: String,
         required: true,
