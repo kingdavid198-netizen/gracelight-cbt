@@ -263,7 +263,7 @@ app.get("/formulas", async (req, res) => {
         if (req.query.topic) filters.topic = req.query.topic;
 
         const formulas = await Formula.find(filters)
-            .sort({ subject: 1 });
+            .sort({ subject: 1, topic: 1, createdAt: 1, _id: 1 });
 
         res.json(formulas);
 
