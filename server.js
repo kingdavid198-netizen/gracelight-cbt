@@ -405,7 +405,7 @@ app.get("/assignments", async (req, res) => {
         if (req.query.subject) filters.subject = resourceSubjectFilter(req.query.subject);
         if (req.query.topic) filters.topic = req.query.topic;
 
-        const assignments = await Assignment.find(filters).sort({ dueDate: 1, createdAt: -1 });
+        const assignments = await Assignment.find(filters).sort({ dueDate: 1, createdAt: 1, _id: 1 });
         res.json(assignments);
     } catch (error) {
         console.log(error);
