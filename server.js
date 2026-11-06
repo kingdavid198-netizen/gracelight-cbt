@@ -128,6 +128,27 @@ app.post("/candidate-photo", rateLimitCandidatePhoto, express.json({ limit: "140
 /* TODO: Protect candidate photo upload in the security phase. */
 app.use(express.json({ limit: "1mb" }));
 
+app.get("/.well-known/assetlinks.json", (req, res) => {
+    const packageName = process.env.ANDROID_PACKAGE_NAME?.trim();
+    const fingerprints = (process.env.ANDROID_SHA256_FINGERPRINTS || "")
+        .split(",")
+        .map(fingerprint => fingerprint.trim())
+        .filter(Boolean);
+
+    res.type("application/json").json(
+        packageName && fingerprints.length
+            ? [{
+                relation: ["delegate_permission/common.handle_all_urls"],
+                target: {
+                    namespace: "android_app",
+                    package_name: packageName,
+                    sha256_cert_fingerprints: fingerprints
+                }
+            }]
+            : []
+    );
+});
+
 app.use(express.static("public"));
 
 app.get("/", (req, res) => {
