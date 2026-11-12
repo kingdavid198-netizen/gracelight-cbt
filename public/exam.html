@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GraceLight CBT Examination</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.7/marked.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.4.17/purify.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/contrib/mhchem.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/contrib/auto-render.min.js"></script>
+<script src="render.js"></script>
 
 <style>
 
@@ -162,6 +169,14 @@ body{
     line-height:1.5;
 }
 
+.question-text .rich-table-scroll{max-width:100%;overflow-x:auto}
+.question-text table{width:max-content;min-width:100%;border-collapse:collapse}
+.question-text th,.question-text td{border:1px solid #cbd5e1;padding:8px}
+.question-text th{background:#f1f5f9}
+.question-text img{max-width:100%;height:auto}
+.question-text sup,.question-text sub{line-height:normal}
+.question-text .katex-display{max-width:100%;overflow-x:auto;overflow-y:hidden}
+
 .option{
     background:#f3f4f6;
     padding:15px;
@@ -178,6 +193,12 @@ body{
 .option input{
     margin-right:10px;
 }
+
+.option label{display:flex;align-items:flex-start;gap:8px;cursor:pointer}
+.option label input{flex:0 0 auto;margin:3px 4px 0 0}
+.option-content{min-width:0}
+.option-content img{max-width:100%;height:auto}
+.option-content sup,.option-content sub{line-height:normal}
 
 .navigation{
     margin-top:10px;
@@ -1411,17 +1432,34 @@ function loadQuestion(){
     if (!q) return;
     const savedAnswer = answers[q.questionId] || "";
     const options = q.options || {};
-    document.getElementById("examSection").innerHTML = `
+    const examSection = document.getElementById("examSection");
+    examSection.innerHTML = `
         <div class="question-number">Question ${currentQuestion + 1}</div>
-        <div class="question-text">${escapeHTML(q.question)}</div>
+        <div class="question-text" data-question-content></div>
         ${q.image ? `<div class="question-image"><img src="${escapeHTML(q.image)}" alt="Question Image" style="max-width:100%;height:auto;margin-top:15px;border-radius:8px;" /></div>` : ""}
         ${["A", "B", "C", "D"].map(label => `
-            <div class="option"><label>
-                <input type="radio" name="option" value="${label}" ${savedAnswer === label ? "checked" : ""} onchange="saveAnswer('${label}')">
-                ${label}. ${escapeHTML(options[label] || "")}
+            <div class="option" data-option-container="${label}"><label>
+                <input type="radio" name="option" value="${label}" ${savedAnswer === label ? "checked" : ""}>
+                <span>${label}.</span>
+                <span class="option-content" data-option-content="${label}"></span>
             </label></div>
         `).join("")}
     `;
+    const renderQuestionContent = () => {
+        renderRichContent(q.question, examSection.querySelector("[data-question-content]"));
+        ["A", "B", "C", "D"].forEach(label =>
+            renderRichContent(options[label] || "", examSection.querySelector(`[data-option-content="${label}"]`), { inline:true })
+        );
+    };
+    renderQuestionContent();
+    ["A", "B", "C", "D"].forEach(label => {
+        examSection.querySelector(`[data-option-container="${label}"]`).addEventListener("change", event => {
+            if(event.target.matches('input[type="radio"]')){
+                saveAnswer(event.target.value);
+                renderQuestionContent();
+            }
+        });
+    });
     updatePalette();
 }
 

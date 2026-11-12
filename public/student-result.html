@@ -3,6 +3,13 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CBT Result Slip</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.7/marked.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.4.17/purify.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/contrib/mhchem.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/contrib/auto-render.min.js"></script>
+<script src="render.js"></script>
 
 <style>
 
@@ -286,6 +293,14 @@ body {
     color: #111827;
 }
 
+.review-question-text .rich-table-scroll{max-width:100%;overflow-x:auto}
+.review-question-text table{width:max-content;min-width:100%;border-collapse:collapse}
+.review-question-text th,.review-question-text td{border:1px solid #cbd5e1;padding:8px}
+.review-question-text th{background:#f1f5f9}
+.review-question-text img{max-width:100%;height:auto}
+.review-question-text sup,.review-question-text sub{line-height:normal}
+.review-question-text .katex-display{max-width:100%;overflow-x:auto;overflow-y:hidden}
+
 .review-question img {
     max-width: 100%;
     height: auto;
@@ -307,6 +322,8 @@ body {
     font-size: 0.95rem;
 }
 
+.review-option img{max-width:100%;height:auto}
+.review-option sup,.review-option sub{line-height:normal}
 .review-option.selected-wrong {
     background: #ffe3e3;
     border-color: #c92a2a;
@@ -644,7 +661,7 @@ function renderAnswerReview(student) {
 
     const optionLabels = ["A", "B", "C", "D"];
 
-    const questionsHtml = review.map(r => {
+    const questionsHtml = review.map((r, reviewIndex) => {
         const options = r.options || {};
 
         const optionsHtml = optionLabels
@@ -660,11 +677,11 @@ function renderAnswerReview(student) {
                     cls += " correct-answer";
                 }
 
-                return `<div class="${cls}">${letter}. ${escapeHtml(options[letter])}</div>`;
+                return `<div class="${cls}">${letter}. <span data-review-option="${reviewIndex}-${letter}"></span></div>`;
             }).join("");
 
         return `
-            <div class="review-question">
+            <div class="review-question" data-review-question="${reviewIndex}">
                 <div class="review-question-header">
                     <span class="qnum">Question ${r.questionNumber}</span>
                     <span class="badge ${r.isCorrect ? "correct" : "wrong"}">
@@ -672,8 +689,8 @@ function renderAnswerReview(student) {
                     </span>
                 </div>
 
-                <div class="review-question-text">${escapeHtml(r.question)}</div>
-                ${r.image ? `<img src="${r.image}" alt="Question Image">` : ""}
+                <div class="review-question-text" data-review-question-content></div>
+                ${r.image ? `<img src="${escapeHtml(r.image)}" alt="Question Image">` : ""}
 
                 <div class="review-options">${optionsHtml}</div>
 
@@ -691,6 +708,19 @@ function renderAnswerReview(student) {
         ${summaryHtml}
         ${questionsHtml}
     `;
+    review.forEach((question, reviewIndex) => {
+        const questionCard = section.querySelector(`[data-review-question="${reviewIndex}"]`);
+        renderRichContent(question.question, questionCard.querySelector("[data-review-question-content]"));
+        optionLabels.forEach(letter => {
+            if(question.options && question.options[letter] !== undefined && question.options[letter] !== null){
+                renderRichContent(
+                    question.options[letter],
+                    questionCard.querySelector(`[data-review-option="${reviewIndex}-${letter}"]`),
+                    { inline:true }
+                );
+            }
+        });
+    });
 }
 
 loadStudentResult();

@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Notes &amp; Assignments - GraceLight CBT</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.7/marked.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.4.17/purify.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/contrib/mhchem.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/contrib/auto-render.min.js"></script>
+<script src="render.js"></script>
 <style>
 :root{
     color-scheme:light;
@@ -69,6 +76,13 @@ input,select,textarea{
 .resource-meta{color:var(--muted);font-size:14px}
 .resource-content{line-height:1.6;margin:12px 0;overflow-wrap:anywhere}
 .resource-card img{display:block;max-width:100%;height:auto;margin-top:12px}
+.rich-content .rich-table-scroll{max-width:100%;overflow-x:auto}
+.rich-content table{width:max-content;min-width:100%;border-collapse:collapse}
+.rich-content th,.rich-content td{border:1px solid var(--line);padding:8px}
+.rich-content th{background:#e8efeb}
+.rich-content img{max-width:100%;height:auto}
+.rich-content sup,.rich-content sub{line-height:normal}
+.rich-content .katex-display{max-width:100%;overflow-x:auto;overflow-y:hidden}
 .assignment-form{max-width:700px;margin-top:20px}
 .assignment-form textarea{min-height:130px;resize:vertical}
 .assignment-form input[type="file"]{padding:9px}
@@ -223,23 +237,26 @@ function renderResources(){
 
     resourceList.className = "";
     if(activeTab === "notes"){
-        resourceList.innerHTML = visibleResources.map(note => `
+        resourceList.innerHTML = visibleResources.map((note, index) => `
             <article class="resource-card">
                 <div class="resource-meta">${escapeHTML(displaySubject(note.subject))} / ${escapeHTML(note.topic || "General")}</div>
                 <h2>${escapeHTML(note.title)}</h2>
-                <div class="resource-content">${note.content || ""}</div>
+                <div class="resource-content rich-content" data-rich-content="${index}"></div>
                 ${note.image ? `<img src="${escapeHTML(note.image)}" alt="">` : ""}
             </article>
         `).join("");
+        visibleResources.forEach((note, index) =>
+            renderRichContent(note.content, resourceList.querySelector(`[data-rich-content="${index}"]`))
+        );
         return;
     }
 
-    resourceList.innerHTML = visibleResources.map(assignment => `
+    resourceList.innerHTML = visibleResources.map((assignment, index) => `
         <article class="resource-card">
             <div class="resource-meta">${escapeHTML(displaySubject(assignment.subject))} / ${escapeHTML(assignment.topic || "General")}</div>
             <h2>${escapeHTML(assignment.title)}</h2>
             <div class="resource-meta">${assignment.dueDate ? `Due ${escapeHTML(new Date(assignment.dueDate).toLocaleDateString())}` : "No due date"}</div>
-            <div class="resource-content">${assignment.instructions || ""}</div>
+            <div class="resource-content rich-content" data-rich-content="${index}"></div>
             <div class="assignment-form">
                 <div class="field">
                     <label for="answer-${assignment._id}">Your answer</label>
@@ -257,6 +274,9 @@ function renderResources(){
             </div>
         </article>
     `).join("");
+    visibleResources.forEach((assignment, index) =>
+        renderRichContent(assignment.instructions, resourceList.querySelector(`[data-rich-content="${index}"]`))
+    );
     visibleResources.forEach(assignment => renderStagedAssignmentFiles(assignment._id));
     loadSavedStudentAnswers(visibleResources);
 }
@@ -466,7 +486,7 @@ async function loadResources(){
 }
 
 studentNameField.value = localStorage.getItem("candidateName") || "";
-loadResources();
+document.addEventListener("DOMContentLoaded", loadResources, { once:true });
 </script>
 </body>
 </html>

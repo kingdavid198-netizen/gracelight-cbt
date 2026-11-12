@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GraceLight CBT Admin Dashboard</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.7/marked.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.4.17/purify.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/contrib/mhchem.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/contrib/auto-render.min.js"></script>
+<script src="render.js"></script>
 
 <style>
 
@@ -130,6 +137,15 @@ button:hover{
     margin-bottom:10px;
     border-radius:8px;
 }
+
+.rich-content{line-height:1.6;overflow-wrap:anywhere}
+.rich-content .rich-table-scroll{max-width:100%;overflow-x:auto}
+.rich-content table{width:max-content;min-width:100%;border-collapse:collapse}
+.rich-content th,.rich-content td{border:1px solid #d1d5db;padding:8px}
+.rich-content th{background:#f1f5f9}
+.rich-content img{max-width:100%;height:auto}
+.rich-content sup,.rich-content sub{line-height:normal}
+.rich-content .katex-display{max-width:100%;overflow-x:auto;overflow-y:hidden}
 
 .content-tabs{
     display:grid;
@@ -777,23 +793,23 @@ async function loadQuestions(){
 
         <label><input type="checkbox" class="question-checkbox" value="${q._id}"> Select</label><br><br>
 
-        <b>Subject:</b> ${q.subject}<br><br>
+        <b>Subject:</b> ${escapeHTML(q.subject)}<br><br>
 
-        <b>Topic:</b> ${q.topic}<br><br>
+        <b>Topic:</b> ${escapeHTML(q.topic)}<br><br>
 
         <b>Question:</b>
-        <div>${q.question}</div>
+        <div class="rich-content" data-question-preview="${index}"></div>
         <br>
 
         ${q.image ? `<img src="${q.image}" style="max-width:300px;display:block;margin-bottom:15px;">` : ""}
 
-        <div>A. ${q.optionA}</div>
-        <div>B. ${q.optionB}</div>
-        <div>C. ${q.optionC}</div>
-        <div>D. ${q.optionD}</div>
+        <div>A. <span class="rich-content" data-question-option="${index}-A"></span></div>
+        <div>B. <span class="rich-content" data-question-option="${index}-B"></span></div>
+        <div>C. <span class="rich-content" data-question-option="${index}-C"></span></div>
+        <div>D. <span class="rich-content" data-question-option="${index}-D"></span></div>
         <br>
 
-        <b>Correct Answer:</b> ${q.answer}<br><br>
+        <b>Correct Answer:</b> ${escapeHTML(q.answer)}<br><br>
 
         <button class="edit-btn"
         onclick="editQuestion('${q._id}')">
@@ -808,6 +824,10 @@ async function loadQuestions(){
         `;
 
         container.appendChild(div);
+        renderRichContent(q.question, div.querySelector(`[data-question-preview="${index}"]`));
+        ["A", "B", "C", "D"].forEach(letter =>
+            renderRichContent(q[`option${letter}`], div.querySelector(`[data-question-option="${index}-${letter}"]`), { inline:true })
+        );
 
     });
 
@@ -1175,19 +1195,20 @@ async function loadFormulas(){
         const response = await fetch("/formulas");
         const formulas = await response.json();
 
-        formulas.forEach(formula => {
-            formulaList.innerHTML += `
+        formulaList.innerHTML = formulas.map((formula, index) => `
                 <div class="formula-card">
                     <b>${formula.subject}</b>
                     <div>${formula.topic || "General"}</div>
                     <h3>${formula.title}</h3>
-                    <p>${formula.content}</p>
+                    <div class="rich-content" data-formula-preview="${index}"></div>
                     ${formula.image ? `<img src="${formula.image}" style="max-width:300px;display:block;margin-top:10px;margin-bottom:10px;">` : ""}
                     <button type="button" class="edit-btn" onclick="editFormula('${formula._id}')">Edit</button>
                     <button type="button" class="danger-button" onclick="deleteFormula('${formula._id}')">Delete</button>
                 </div>
-            `;
-        });
+            `).join("");
+        formulas.forEach((formula, index) =>
+            renderRichContent(formula.content, formulaList.querySelector(`[data-formula-preview="${index}"]`))
+        );
     }catch(error){
         console.log(error);
         formulaList.innerHTML = "Unable to load formulas.";
@@ -1251,15 +1272,19 @@ async function loadAssignments(){
             assignmentList.textContent = "No assignments yet.";
             return;
         }
-        assignmentList.innerHTML = assignments.map(assignment => `
+        assignmentList.innerHTML = assignments.map((assignment, index) => `
             <div class="assignment-card">
                 <b>${escapeHTML(assignment.subject)} / ${escapeHTML(assignment.topic)}</b>
                 <h4>${escapeHTML(assignment.title)}</h4>
                 <div>${assignment.dueDate ? `Due ${escapeHTML(new Date(assignment.dueDate).toLocaleDateString())}` : "No due date"}</div>
+                <div class="rich-content" data-assignment-preview="${index}"></div>
                 <button type="button" onclick="loadAssignmentSubmissions('${assignment._id}')">View Submissions</button>
                 <button type="button" class="danger-button" onclick="deleteAssignment('${assignment._id}')">Delete</button>
             </div>
         `).join("");
+        assignments.forEach((assignment, index) =>
+            renderRichContent(assignment.instructions, assignmentList.querySelector(`[data-assignment-preview="${index}"]`))
+        );
     }catch(error){
         console.log(error);
         assignmentList.textContent = "Unable to load assignments.";
