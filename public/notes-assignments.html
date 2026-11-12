@@ -8,9 +8,9 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.7/marked.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.4.17/purify.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/katex.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/contrib/mhchem.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/contrib/auto-render.min.js"></script>
-<script src="render.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.19.1/contrib/mhchem.min.js"></script>
+<script defer src="/render.js"></script>
 <style>
 :root{
     color-scheme:light;
@@ -167,12 +167,25 @@ const commonSubjects = [
 let notes = [];
 let assignments = [];
 let activeTab = "notes";
+let renderGeneration = 0;
 const stagedAssignmentFiles = new Map();
 
 function escapeHTML(value){
     return String(value || "").replace(/[&<>"']/g, character => ({
         "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
     })[character]);
+}
+
+function renderResourceContent(rawString, targetElement){
+    try{
+        if(typeof window.renderRichContent !== "function"){
+            throw new Error("Rich-content renderer is unavailable");
+        }
+        window.renderRichContent(rawString, targetElement);
+    }catch(error){
+        console.error("Unable to render resource content", error);
+        targetElement.textContent = String(rawString == null ? "" : rawString);
+    }
 }
 
 function displaySubject(subject){
@@ -229,6 +242,7 @@ function showResourceTab(tab, button){
 
 function renderResources(){
     const visibleResources = selectedResources(activeTab === "notes" ? notes : assignments);
+    const generation = ++renderGeneration;
     if(!visibleResources.length){
         resourceList.className = "status";
         resourceList.textContent = activeTab === "notes" ? "No notes match these filters." : "No assignments match these filters.";
@@ -236,49 +250,65 @@ function renderResources(){
     }
 
     resourceList.className = "";
-    if(activeTab === "notes"){
-        resourceList.innerHTML = visibleResources.map((note, index) => `
+    resourceList.replaceChildren();
+    const loading = document.createElement("div");
+    loading.className = "status";
+    loading.textContent = "Loading resources...";
+    resourceList.appendChild(loading);
+    let firstCardReady = false;
+
+    function renderNextCard(index){
+        if(generation !== renderGeneration) return;
+        const resource = visibleResources[index];
+        const isAssignment = activeTab === "assignments";
+        const card = isAssignment ? `
             <article class="resource-card">
-                <div class="resource-meta">${escapeHTML(displaySubject(note.subject))} / ${escapeHTML(note.topic || "General")}</div>
-                <h2>${escapeHTML(note.title)}</h2>
-                <div class="resource-content rich-content" data-rich-content="${index}"></div>
-                ${note.image ? `<img src="${escapeHTML(note.image)}" alt="">` : ""}
+                <div class="resource-meta">${escapeHTML(displaySubject(resource.subject))} / ${escapeHTML(resource.topic || "General")}</div>
+                <h2>${escapeHTML(resource.title)}</h2>
+                <div class="resource-meta">${resource.dueDate ? `Due ${escapeHTML(new Date(resource.dueDate).toLocaleDateString())}` : "No due date"}</div>
+                <div class="resource-content rich-content"></div>
+                <div class="assignment-form">
+                    <div class="field">
+                        <label for="answer-${resource._id}">Your answer</label>
+                        <textarea id="answer-${resource._id}" placeholder="Write an answer"></textarea>
+                    </div>
+                    <div class="field">
+                        <label>Assignment files (optional)</label>
+                        <input id="file-${resource._id}" type="file" accept="image/*,application/pdf" multiple hidden onchange="stageAssignmentFiles('${resource._id}', this)">
+                        <button id="add-files-${resource._id}" class="primary-button" type="button" onclick="document.getElementById('file-${resource._id}').click()">Add files</button>
+                    </div>
+                    <div id="selected-files-${resource._id}" class="selected-files" hidden></div>
+                    <div id="saved-file-${resource._id}" class="saved-file"></div>
+                    <div id="upload-status-${resource._id}" class="upload-status" role="status" aria-live="polite"></div>
+                    <button id="submit-${resource._id}" class="primary-button" type="button" onclick="submitStudentAssignment('${resource._id}')">Submit answer</button>
+                </div>
             </article>
-        `).join("");
-        visibleResources.forEach((note, index) =>
-            renderRichContent(note.content, resourceList.querySelector(`[data-rich-content="${index}"]`))
-        );
-        return;
+        ` : `
+            <article class="resource-card">
+                <div class="resource-meta">${escapeHTML(displaySubject(resource.subject))} / ${escapeHTML(resource.topic || "General")}</div>
+                <h2>${escapeHTML(resource.title)}</h2>
+                <div class="resource-content rich-content"></div>
+                ${resource.image ? `<img src="${escapeHTML(resource.image)}" alt="">` : ""}
+            </article>
+        `;
+        resourceList.insertAdjacentHTML("beforeend", card);
+        const article = resourceList.lastElementChild;
+        const contentElement = article.querySelector(".rich-content");
+        renderResourceContent(isAssignment ? resource.instructions : resource.content, contentElement);
+        if(isAssignment){
+            renderStagedAssignmentFiles(resource._id);
+            loadSavedStudentAnswers([resource]);
+        }
+        if(!firstCardReady){
+            loading.remove();
+            firstCardReady = true;
+        }
+        if(index + 1 < visibleResources.length){
+            requestAnimationFrame(() => renderNextCard(index + 1));
+        }
     }
 
-    resourceList.innerHTML = visibleResources.map((assignment, index) => `
-        <article class="resource-card">
-            <div class="resource-meta">${escapeHTML(displaySubject(assignment.subject))} / ${escapeHTML(assignment.topic || "General")}</div>
-            <h2>${escapeHTML(assignment.title)}</h2>
-            <div class="resource-meta">${assignment.dueDate ? `Due ${escapeHTML(new Date(assignment.dueDate).toLocaleDateString())}` : "No due date"}</div>
-            <div class="resource-content rich-content" data-rich-content="${index}"></div>
-            <div class="assignment-form">
-                <div class="field">
-                    <label for="answer-${assignment._id}">Your answer</label>
-                    <textarea id="answer-${assignment._id}" placeholder="Write your answer"></textarea>
-                </div>
-                <div class="field">
-                    <label>Assignment files (optional)</label>
-                    <input id="file-${assignment._id}" type="file" accept="image/*,application/pdf" multiple hidden onchange="stageAssignmentFiles('${assignment._id}', this)">
-                    <button id="add-files-${assignment._id}" class="primary-button" type="button" onclick="document.getElementById('file-${assignment._id}').click()">Add files</button>
-                </div>
-                <div id="selected-files-${assignment._id}" class="selected-files" hidden></div>
-                <div id="saved-file-${assignment._id}" class="saved-file"></div>
-                <div id="upload-status-${assignment._id}" class="upload-status" role="status" aria-live="polite"></div>
-                <button id="submit-${assignment._id}" class="primary-button" type="button" onclick="submitStudentAssignment('${assignment._id}')">Submit answer</button>
-            </div>
-        </article>
-    `).join("");
-    visibleResources.forEach((assignment, index) =>
-        renderRichContent(assignment.instructions, resourceList.querySelector(`[data-rich-content="${index}"]`))
-    );
-    visibleResources.forEach(assignment => renderStagedAssignmentFiles(assignment._id));
-    loadSavedStudentAnswers(visibleResources);
+    requestAnimationFrame(() => renderNextCard(0));
 }
 
 async function loadSavedStudentAnswers(visibleAssignments){

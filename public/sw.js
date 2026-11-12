@@ -1,4 +1,4 @@
-const CACHE_NAME = "gracelight-pwa-assets-v1";
+const CACHE_NAME = "gracelight-pwa-assets-v2";
 const CACHED_ASSETS = [
     "/manifest.webmanifest",
     "/icons/icon-192.png",
@@ -12,6 +12,18 @@ self.addEventListener("install", event => {
         caches.open(CACHE_NAME)
             .then(cache => cache.addAll(CACHED_ASSETS))
             .then(() => self.skipWaiting())
+    );
+});
+
+self.addEventListener("activate", event => {
+    event.waitUntil(
+        caches.keys()
+            .then(cacheNames => Promise.all(
+                cacheNames
+                    .filter(cacheName => cacheName.startsWith("gracelight-pwa-assets-") && cacheName !== CACHE_NAME)
+                    .map(cacheName => caches.delete(cacheName))
+            ))
+            .then(() => self.clients.claim())
     );
 });
 

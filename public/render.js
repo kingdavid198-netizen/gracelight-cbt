@@ -5,28 +5,200 @@
         })[character]);
     }
 
+    function scanTags(content, callback){
+        let cursor = 0;
+        while((cursor = content.indexOf("<", cursor)) !== -1){
+            const end = content.indexOf(">", cursor + 1);
+            if(end === -1) return;
+            const tag = content.slice(cursor, end + 1);
+            const match = /^<\s*(\/?)\s*([a-z][\w:-]*)\b/i.exec(tag);
+            if(match) callback(match[2].toLowerCase(), match[1] === "/", tag, cursor, end + 1);
+            cursor = end + 1;
+        }
+    }
+
     function findHtmlBlockSpans(content){
         const spans = [];
-        const tagPattern = /<\/?(table|div|ul|ol|pre|blockquote|h[1-6]|p)\b[^>]*>/gi;
         const stack = [];
+        const blockTags = new Set(["table", "div", "ul", "ol", "pre", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6", "p"]);
         let start = -1;
-        let match;
-        while((match = tagPattern.exec(content))){
-            const tagName = match[1].toLowerCase();
-            if(/^<\//.test(match[0])){
-                const matchingIndex = stack.lastIndexOf(tagName);
-                if(matchingIndex === -1) continue;
-                stack.length = matchingIndex;
+        scanTags(content, (name, closing, tag, tagStart, tagEnd) => {
+            if(!blockTags.has(name)) return;
+            if(closing){
+                const index = stack.lastIndexOf(name);
+                if(index === -1) return;
+                stack.length = index;
                 if(!stack.length){
-                    spans.push([start, tagPattern.lastIndex]);
+                    spans.push([start, tagEnd]);
                     start = -1;
                 }
-            }else if(!/\/\s*>$/.test(match[0])){
-                if(!stack.length) start = match.index;
-                stack.push(tagName);
+            }else if(!/\/\s*>$/.test(tag)){
+                if(!stack.length) start = tagStart;
+                stack.push(name);
             }
-        }
+        });
         return spans;
+    }
+
+    function containsMarkdownSignal(content, excludedSpans){
+        let cursor = 0;
+        let spanIndex = 0;
+        while(cursor < content.length){
+            const lineEnd = content.indexOf("\n", cursor);
+            const end = lineEnd === -1 ? content.length : lineEnd;
+            while(spanIndex < excludedSpans.length && excludedSpans[spanIndex][1] <= cursor) spanIndex++;
+            const overlapsHtml = spanIndex < excludedSpans.length &&
+                excludedSpans[spanIndex][0] < end && excludedSpans[spanIndex][1] > cursor;
+            if(!overlapsHtml){
+                const line = content.slice(cursor, end).replace(/\r$/, "");
+                const trimmed = line.replace(/^[ \t]{0,3}/, "");
+                if(/^#{1,6}\s+\S/.test(trimmed) ||
+                    /^(?:[-*+] |\d+\. )/.test(trimmed) ||
+                    /^>\s+/.test(trimmed) ||
+                    isPipeSeparator(trimmed) ||
+                    hasBoldMarkers(line)){
+                    return true;
+                }
+            }
+            cursor = end + 1;
+        }
+        return false;
+    }
+
+    function isPipeSeparator(line){
+        if(line.indexOf("|") === -1 || line.indexOf("-") === -1) return false;
+        const cells = line.split("|");
+        let count = 0;
+        for(const cell of cells){
+            const value = cell.trim();
+            if(!/^:?-{3,}:?$/.test(value)) continue;
+            count++;
+        }
+        return count >= 2;
+    }
+
+    function hasBoldMarkers(line){
+        const pairs = ["**", "__"];
+        for(const marker of pairs){
+            const first = line.indexOf(marker);
+            if(first === -1) continue;
+            const second = line.indexOf(marker, first + marker.length);
+            if(second > first + marker.length) return true;
+        }
+        return false;
+    }
+
+    function replaceSpans(content, spans, replace){
+        let result = "";
+        let cursor = 0;
+        spans.forEach((span, index) => {
+            result += content.slice(cursor, span[0]) + replace(content.slice(span[0], span[1]), index);
+            cursor = span[1];
+        });
+        return result + content.slice(cursor);
+    }
+
+    function extractMath(content){
+        const segments = [];
+        let output = "";
+        let cursor = 0;
+        let openStart = -1;
+        let openType = "";
+        let braceDepth = 0;
+        let index = 0;
+        while(index < content.length){
+            if(!openType){
+                if(content.startsWith("\\ce{", index)){
+                    openStart = index;
+                    openType = "chem";
+                    braceDepth = 1;
+                    index += 4;
+                    continue;
+                }
+                if(content.startsWith("\\[", index) || content.startsWith("\\(", index)){
+                    openStart = index;
+                    openType = content[index + 1] === "[" ? "display-bracket" : "inline-paren";
+                    index += 2;
+                    continue;
+                }
+                if(content.startsWith("$$", index) && !isEscaped(content, index)){
+                    openStart = index;
+                    openType = "display-dollar";
+                    index += 2;
+                    continue;
+                }
+                if(content[index] === "$" && !isEscaped(content, index) &&
+                    content[index + 1] !== "$" && index + 1 < content.length &&
+                    !/\s/.test(content[index + 1])){
+                    openStart = index;
+                    openType = "inline-dollar";
+                    index++;
+                    continue;
+                }
+            }else if(openType === "chem"){
+                if(content[index] === "{" && !isEscaped(content, index)) braceDepth++;
+                if(content[index] === "}" && !isEscaped(content, index) && --braceDepth === 0){
+                    const raw = content.slice(openStart, index + 1);
+                    output += content.slice(cursor, openStart);
+                    const token = `MATHSEGMENTTOKEN${segments.length}END`;
+                    segments.push(raw.startsWith("\\ce{") ? `$${raw}$` : raw);
+                    output += token;
+                    cursor = index + 1;
+                    openType = "";
+                }
+            }else{
+                const closing = openType === "display-dollar" ? "$$" :
+                    openType === "inline-dollar" ? "$" :
+                    openType === "display-bracket" ? "\\]" : "\\)";
+                if(content.startsWith(closing, index) && !isEscaped(content, index)){
+                    const closeEnd = index + closing.length;
+                    const raw = content.slice(openStart, closeEnd);
+                    const isValidInline = openType !== "inline-dollar" ||
+                        (index > openStart + 1 && !/\s/.test(content[index - 1]));
+                    if(isValidInline){
+                        const currency = openType === "inline-dollar" &&
+                            /^\$\d+(?:\.\d{1,2})?\s+(?:and|or|to)\s+\$\d+(?:\.\d{1,2})?\$$/i.test(raw);
+                        output += content.slice(cursor, openStart);
+                        if(currency){
+                            output += `MATHSEGMENTTOKEN${segments.length}END`;
+                            segments.push({currency:raw});
+                        }else{
+                            output += `MATHSEGMENTTOKEN${segments.length}END`;
+                            segments.push(raw);
+                        }
+                        cursor = closeEnd;
+                        index = closeEnd;
+                        openType = "";
+                        continue;
+                    }
+                }
+            }
+            index++;
+        }
+        return {
+            content:output + content.slice(cursor),
+            segments
+        };
+    }
+
+    function isEscaped(content, index){
+        let slashes = 0;
+        for(let i = index - 1; i >= 0 && content[i] === "\\"; i--) slashes++;
+        return slashes % 2 === 1;
+    }
+
+    function normalizeMixedContent(content){
+        const normalized = content.split(/\r?\n/).map(line =>
+            /^[ \t]*</.test(line) ? line.replace(/^[ \t]+/, "") : line
+        ).join("\n");
+        const spans = findHtmlBlockSpans(normalized);
+        const htmlBlocks = [];
+        const markdownInput = replaceSpans(normalized, spans, block => {
+            const token = `<!--HTMLBLOCKTOKEN${htmlBlocks.length}END-->`;
+            htmlBlocks.push(block);
+            return `\n\n${token}\n\n`;
+        });
+        return {markdownInput, htmlBlocks};
     }
 
     function renderRichContent(rawString, targetElement, options = {}){
@@ -46,97 +218,61 @@
                 "href", "target", "rel"
             ]
         };
-        const hasHtmlTag = /<\/?[a-z][\w:-]*(?:\s[^<>]*?)?\s*\/?>/i.test(source);
-        const hasMathDelimiter = /\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\\ce\{[^{}]*\}|(?<!\\)\$(?!\$)(?=\S)(?:\\.|[^$\r\n\\])*\S\$(?![\d$])/.test(source);
-
-        if(inline && !hasHtmlTag && !hasMathDelimiter){
-            targetElement.textContent = source;
-            return;
-        }
-
-        const htmlBlockPattern = /<(?:p|table|thead|tbody|tfoot|tr|th|td|ul|ol|h[1-6]|div|br)\b/i;
-        const markdownPattern =
-            /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/m.test(source) ||
-            /^\s{0,3}#{1,6}\s+\S/m.test(source) ||
-            /^\s*(?:[-*+] |\d+\. )/m.test(source) ||
-            /(?:\*\*[^*\r\n]+\*\*|__[^_\r\n]+__)/.test(source) ||
-            /^\s{0,3}>\s+/m.test(source);
-        const hasMath = hasMathDelimiter;
-
-        if(!inline && !hasHtmlTag && !markdownPattern && !hasMath){
-            targetElement.textContent = source;
-            return;
-        }
-
-        const mathSegments = [];
-        const contentWithProtectedMath = source.replace(
-            /\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\\ce\{[^{}]*\}|(?<!\\)\$(?!\$)(?=\S)(?:\\.|[^$\r\n\\])*\S\$(?![\d$])/g,
-            match => {
-                const token = `MATHSEGMENTTOKEN${mathSegments.length}END`;
-                mathSegments.push(match.startsWith("\\ce{") ? `$${match}$` : match);
-                return token;
-            }
-        );
-        const currencySegments = [];
-        const protectedContent = contentWithProtectedMath.replace(
-            /\$\d+(?:\.\d{1,2})?(?:(?:\s+(?:and|or|to)\s+|,\s*)\$\d+(?:\.\d{1,2})?)+/gi,
-            match => {
-                const token = `CURRENCYSEGMENTTOKEN${currencySegments.length}END`;
-                currencySegments.push(match);
-                return token;
-            }
-        );
 
         try{
+            const overSizeLimit = source.length > 100000;
+            const hasHtmlTag = source.indexOf("<") !== -1 && (function(){
+                let found = false;
+                scanTags(source, () => { found = true; });
+                return found;
+            })();
+            const hasMath = !overSizeLimit && (
+                source.indexOf("$") !== -1 || source.indexOf("\\[") !== -1 ||
+                source.indexOf("\\(") !== -1 || source.indexOf("\\ce{") !== -1
+            );
+            if(inline && !hasHtmlTag && !hasMath){
+                targetElement.textContent = source;
+                return;
+            }
+            if(!inline && !hasHtmlTag && !hasMath && !/[#>*_|\-]/.test(source)){
+                targetElement.textContent = source;
+                return;
+            }
+
+            const mathResult = overSizeLimit || !hasMath ? {content:source, segments:[]} : extractMath(source);
             let rendered;
-            let currencyPlaceholders = [];
-            if(inline){
-                rendered = hasHtmlTag ? protectedContent : escapeHTML(protectedContent);
+            let currencySegments = [];
+            if(overSizeLimit){
+                rendered = source;
+            }else if(inline){
+                rendered = hasHtmlTag ? mathResult.content : escapeHTML(mathResult.content);
             }else{
+                const htmlBlockPattern = /<(?:p|table|thead|tbody|tfoot|tr|th|td|ul|ol|h[1-6]|div|br)\b/i;
                 const hasHtmlBlock = htmlBlockPattern.test(source);
-                const htmlBlockSpans = findHtmlBlockSpans(protectedContent);
-                let markdownProbe = protectedContent;
-                htmlBlockSpans.slice().reverse().forEach(([start, end]) => {
-                    const maskedBlock = markdownProbe.slice(start, end).replace(/[^\r\n]/g, " ");
-                    markdownProbe = markdownProbe.slice(0, start) + maskedBlock + markdownProbe.slice(end);
-                });
-                markdownProbe = markdownProbe.replace(/<[^>]*>/g, "");
-                const hasMarkdown =
-                    /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/m.test(markdownProbe) ||
-                    /^\s{0,3}#{1,6}\s+\S/m.test(markdownProbe) ||
-                    /^\s*(?:[-*+] |\d+\. )/m.test(markdownProbe) ||
-                    /(?:\*\*[^*\r\n]+\*\*|__[^_\r\n]+__)/.test(markdownProbe) ||
-                    /^\s{0,3}>\s+/m.test(markdownProbe);
-                const mixed = hasHtmlBlock && hasMarkdown;
-                let markdownInput = protectedContent;
-                const htmlPlaceholders = [];
-
-                if(mixed){
-                    markdownInput = markdownInput
-                        .replace(/^[ \t]+(?=<)/, "")
-                        .replace(/(\r?\n)[ \t]+(?=<)/g, "$1");
-                    findHtmlBlockSpans(markdownInput).slice().reverse().forEach(([start, end]) => {
-                        const token = `<!--HTMLBLOCKTOKEN${htmlPlaceholders.length}END-->`;
-                        htmlPlaceholders.push(markdownInput.slice(start, end));
-                        markdownInput = markdownInput.slice(0, start) + `\n\n${token}\n\n` + markdownInput.slice(end);
-                    });
+                const spans = findHtmlBlockSpans(mathResult.content);
+                const hasMarkdown = containsMarkdownSignal(mathResult.content, spans);
+                let markdownInput = mathResult.content;
+                let htmlBlocks = [];
+                if(hasHtmlBlock && hasMarkdown){
+                    const normalized = normalizeMixedContent(markdownInput, spans);
+                    markdownInput = normalized.markdownInput;
+                    htmlBlocks = normalized.htmlBlocks;
                 }
-
                 rendered = hasHtmlBlock && !hasMarkdown
                     ? markdownInput
-                    : marked.parse(markdownInput, { gfm:true, breaks:true });
+                    : marked.parse(markdownInput, {gfm:true, breaks:true});
                 rendered = rendered.replace(/<!--HTMLBLOCKTOKEN(\d+)END-->/g, (token, index) =>
-                    htmlPlaceholders[Number(index)] || token
+                    htmlBlocks[Number(index)] || token
                 );
             }
 
-            rendered = rendered.replace(/MATHSEGMENTTOKEN(\d+)END/g, (token, index) =>
-                escapeHTML(mathSegments[Number(index)] || token)
-            );
-            rendered = rendered.replace(/CURRENCYSEGMENTTOKEN(\d+)END/g, (token, index) => {
-                const placeholder = `CURRENCYRESTORETOKEN${currencyPlaceholders.length}END`;
-                currencyPlaceholders.push(currencySegments[Number(index)] || token);
-                return placeholder;
+            rendered = rendered.replace(/MATHSEGMENTTOKEN(\d+)END/g, (token, index) => {
+                const segment = mathResult.segments[Number(index)];
+                if(segment && typeof segment === "object"){
+                    currencySegments.push(segment.currency);
+                    return `CURRENCYRESTORETOKEN${currencySegments.length - 1}END`;
+                }
+                return escapeHTML(segment || token);
             });
             targetElement.innerHTML = DOMPurify.sanitize(rendered, sanitizeOptions);
             if(!inline){
@@ -147,31 +283,25 @@
                     wrapper.appendChild(table);
                 });
             }
-            if(hasMath || currencyPlaceholders.length){
+            if(!overSizeLimit && mathResult.segments.some(segment => typeof segment === "string")){
                 renderMathInElement(targetElement, {
                     delimiters:[
-                        { left:"$$", right:"$$", display:true },
-                        { left:"\\[", right:"\\]", display:true },
-                        { left:"\\(", right:"\\)", display:false },
-                        { left:"$", right:"$", display:false }
+                        {left:"$$", right:"$$", display:true},
+                        {left:"\\[", right:"\\]", display:true},
+                        {left:"\\(", right:"\\)", display:false},
+                        {left:"$", right:"$", display:false}
                     ],
                     throwOnError:false
                 });
             }
-            targetElement.innerHTML = targetElement.innerHTML.replace(/CURRENCYRESTORETOKEN(\d+)END/g, (token, index) =>
-                escapeHTML(currencyPlaceholders[Number(index)] || token)
-            );
+            if(currencySegments.length){
+                targetElement.innerHTML = targetElement.innerHTML.replace(/CURRENCYRESTORETOKEN(\d+)END/g, (token, index) =>
+                    escapeHTML(currencySegments[Number(index)] || token)
+                );
+            }
         }catch(error){
             console.error("Unable to render rich content", error);
-            try{
-                targetElement.innerHTML = global.DOMPurify
-                    ? global.DOMPurify.sanitize(source, sanitizeOptions)
-                    : "";
-                if(!global.DOMPurify) targetElement.textContent = source;
-            }catch(fallbackError){
-                console.error("Unable to sanitize rich content fallback", fallbackError);
-                targetElement.textContent = source;
-            }
+            targetElement.textContent = source;
         }
     }
 
